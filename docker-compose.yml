@@ -8,14 +8,10 @@ services:
       POSTGRES_PASSWORD: botbesties
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
 
   redis:
     image: redis:alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -34,11 +30,11 @@ services:
     volumes:
       - .:/app
     ports:
-      - "7175:7175"
+      - "7177:7177"
     command: >
       sh -c "uv run python manage.py migrate &&
              uv run python manage.py seed &&
-             uv run daphne -b 0.0.0.0 -p 7175 botbesties.asgi:application"
+             uv run daphne -b 0.0.0.0 -p 7177 botbesties.asgi:application"
 
   bot:
     build:
