@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from django.contrib import admin
 
+from .models import Alias
 from .models import Bot
 from .models import Channel
-from .models import Skill
 from .models import Command
+from .models import Counter
+from .models import Skill
 
 
 class ChannelInline(admin.TabularInline):
@@ -63,4 +65,20 @@ class SkillAdmin(admin.ModelAdmin):
     list_display = ("name", "channel", "enabled")
     list_filter = ("channel", "enabled")
     search_fields = ("name",)
+    ordering = ["channel", "name"]
+
+
+@admin.register(Counter)
+class CounterAdmin(admin.ModelAdmin):
+    list_display = ("name", "label", "channel", "value")
+    list_filter = ("channel",)
+    search_fields = ("name", "label")
+    ordering = ["channel", "name"]
+
+
+@admin.register(Alias)
+class AliasAdmin(admin.ModelAdmin):
+    list_display = ("name", "target", "channel")
+    list_filter = ("channel",)
+    search_fields = ("name", "target")
     ordering = ["channel", "name"]

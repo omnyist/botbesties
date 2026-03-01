@@ -66,7 +66,7 @@ class Channel(models.Model):
 class Command(models.Model):
     """A text command defined via chat (!addcom) or admin.
 
-    Response text supports variables like $(user), $(channel), $(count).
+    Response text supports variables like $(user), $(channel), $(uses).
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -97,7 +97,7 @@ class Command(models.Model):
 class Skill(models.Model):
     """A Python-implemented command toggled per channel.
 
-    The actual logic lives in bot/components/ as Python code.
+    The actual logic lives in bot/skills/ as Python handler classes.
     This model controls whether the skill is enabled for a channel
     and provides per-channel configuration via the config JSON field.
     """
@@ -117,3 +117,53 @@ class Skill(models.Model):
     def __str__(self):
         status = "enabled" if self.enabled else "disabled"
         return f"!{self.name} ({status}) in #{self.channel.twitch_channel_name}"
+
+
+class Counter(models.Model):
+    """A named counter per channel (death count, scare count, etc.).
+
+    Stored as a dedicated model (not Skill.config JSON) so we can use
+    Django F() expressions for atomic increments and provide direct
+    admin editing.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.ForeignKey(
+        Channel, on_delete=models.CASCADE, related_name="counters"
+    )
+    name = models.CharField(max_length=100)
+    label = models.CharField(max_length=100, blank=True, default="")
+    value = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ["channel", "name"]
+        ordering = ["name"]
+
+    def __str__(self):
+        display = self.label or self.name.title()
+        return f"{display}: {self.value} in #{self.channel.twitch_channel_name}"
+
+
+class Alias(models.Model):
+    """A type-agnostic command alias per channel.
+
+    Resolved early in the message pipeline — rewrites the trigger to
+    the target text before routing. Works for both text commands and
+    skills transparently.
+
+    Example: name="ct", target="count death" rewrites !ct → !count death.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.ForeignKey(
+        Channel, on_delete=models.CASCADE, related_name="aliases"
+    )
+    name = models.CharField(max_length=100)
+    target = models.CharField(max_length=200)
+
+    class Meta:
+        unique_together = ["channel", "name"]
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"!{self.name} → !{self.target} in #{self.channel.twitch_channel_name}"
