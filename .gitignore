@@ -14,9 +14,6 @@ build/
 venv/
 env/
 
-# uv
-uv.lock
-
 # Django
 *.sqlite3
 db.sqlite3
