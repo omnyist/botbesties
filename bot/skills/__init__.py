@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import twitchio
+    from twitchio.ext import commands
 
     from core.models import Skill
 
@@ -26,6 +27,7 @@ class SkillHandler:
         payload: twitchio.ChatMessage,
         args: str,
         skill: Skill,
+        bot: commands.Bot,
     ) -> None:
         raise NotImplementedError
 

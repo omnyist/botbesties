@@ -69,7 +69,9 @@ The `type` field on the Command model determines how the response is chosen and 
 
 ### Skill Handlers
 
-Skills are Python handler classes in `bot/skills/` for complex built-in behaviors that need real Python logic (future: quotes, followage, API integrations). Each skill is a `SkillHandler` subclass registered in `SKILL_REGISTRY`. The router checks commands first, then falls back to skill handlers.
+Skills are Python handler classes in `bot/skills/` for complex built-in behaviors that need real Python logic (future: shoutout, quotes, followage, API integrations). Each skill is a `SkillHandler` subclass registered in `SKILL_REGISTRY`. The router checks commands first, then falls back to skill handlers.
+
+Handler signature: `handle(self, payload, args, skill, bot)` — the `bot` parameter gives handlers access to the TwitchIO client for API calls (e.g., `bot.fetch_users()`).
 
 ## Message Processing Pipeline
 
@@ -153,12 +155,29 @@ For importing commands from DeepBot, these map to our system:
 | `@if@` | — | Skill (not yet implemented) |
 | `@followdate@`, `@hours@`, `@points@` | — | Skill (needs Twitch API) |
 
+## Spoonee Import — Remaining Skipped Commands
+
+| Skipped Command | What It Is | Status |
+|---|---|---|
+| `conch` | Magic Conch Shell | ✅ random_list command |
+| `getyeflask` | Random chance game | ✅ lottery command |
+| `parrotfact` | Parrot facts | ✅ random_list command |
+| `count` | Counter management | ✅ builtin management command |
+| `ct` | Counter alias → `count death` | ✅ Seeded as alias |
+| `countadd` | Counter alias → `count death +` | ✅ Seeded as alias |
+| `addscare` | Counter alias → `count scare +` | ✅ Seeded as alias |
+| `scare` | Counter alias → `count scare` | ✅ Seeded as alias |
+| `caster` | Shoutout command | Needs Twitch API — future skill |
+| `checkme` | Follow check | Needs Twitch API — future skill |
+| `followcheck` | Follow check | Needs Twitch API — future skill |
+| `forreal` | Unknown | Ask Spoonee |
+
 ## Management Commands
 
 | Command | Description |
 |---|---|
 | `manage.py runbot` | Start all active bot instances |
-| `manage.py seed` | Create initial users, bots, channels, and Spoonee's channel commands |
+| `manage.py seed` | Create initial users, bots, channels, Spoonee's commands, counters, and aliases |
 | `manage.py importcommands <json> --channel <name>` | Bulk import commands from JSON. Use `--dry-run` to preview. Sets `created_by` to channel owner name |
 
 ### Import JSON Format

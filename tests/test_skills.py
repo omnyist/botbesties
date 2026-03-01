@@ -63,7 +63,7 @@ class TestLotteryType:
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert response == "testuser wins!"
+        assert response == "TestUser wins!"
 
     async def test_lottery_failure_at_0_percent(self, make_command):
         from bot.router import CommandRouter
@@ -92,7 +92,7 @@ class TestLotteryType:
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert response == "You can't get ye flask, testuser!"
+        assert response == "You can't get ye flask, TestUser!"
 
     async def test_lottery_increments_use_count(self, make_command):
         from bot.router import CommandRouter
@@ -242,7 +242,7 @@ class TestRandomListType:
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert response == "Hello testuser!"
+        assert response == "Hello TestUser!"
 
 
 @pytest.mark.django_db(transaction=True)

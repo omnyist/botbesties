@@ -72,7 +72,7 @@ class ManagementCommands(commands.Component):
             channel=channel,
             name=name,
             response=response,
-            created_by=ctx.chatter.name if ctx.chatter else "",
+            created_by=ctx.chatter.display_name if ctx.chatter else "",
         )
 
         await ctx.send(f"Command !{name} has been created.")

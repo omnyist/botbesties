@@ -69,7 +69,7 @@ class TestCommandRouterTextCommands:
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert response == "Hello testuser!"
+        assert response == "Hello TestUser!"
 
     async def test_increments_use_count(self, make_command):
         from core.models import Command
@@ -120,7 +120,7 @@ class TestCommandRouterTextCommands:
         )
         await router.event_message(payload)
 
-        payload.respond.assert_called_once_with("testuser lurks.", me=True)
+        payload.respond.assert_called_once_with("TestUser lurks.", me=True)
 
     async def test_me_action_with_dash_separator(self, make_command):
         make_command(
@@ -138,7 +138,7 @@ class TestCommandRouterTextCommands:
         response = payload.respond.call_args[0][0]
         kwargs = payload.respond.call_args[1]
         assert kwargs["me"] is True
-        assert response == "testuser settles in for a cozy lurk."
+        assert response == "TestUser settles in for a cozy lurk."
 
     async def test_target_variable_from_args(self, make_command):
         make_command(name="hug", response="$(user) hugs $(target)!")
@@ -150,7 +150,7 @@ class TestCommandRouterTextCommands:
         )
         await router.event_message(payload)
 
-        payload.respond.assert_called_once_with("testuser hugs Bryan!", me=False)
+        payload.respond.assert_called_once_with("TestUser hugs Bryan!", me=False)
 
     async def test_target_falls_back_to_user(self, make_command):
         make_command(name="hug", response="$(user) hugs $(target)!")
@@ -163,7 +163,7 @@ class TestCommandRouterTextCommands:
         await router.event_message(payload)
 
         payload.respond.assert_called_once_with(
-            "testuser hugs testuser!", me=False
+            "TestUser hugs TestUser!", me=False
         )
 
 
@@ -260,7 +260,7 @@ class TestCommandRouterAliases:
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert response == "Hi from testuser!"
+        assert response == "Hi from TestUser!"
 
     async def test_alias_resolves_to_typed_command(
         self, make_command, make_alias
@@ -315,7 +315,7 @@ class TestCommandRouterSkillFallback:
         class TestSkillHandler(SkillHandler):
             name = "testskill"
 
-            async def handle(self, payload, args, skill):
+            async def handle(self, payload, args, skill, bot):
                 await payload.respond(f"Skill response: {args}")
 
         register_skill(TestSkillHandler())
@@ -345,7 +345,7 @@ class TestCommandRouterSkillFallback:
         class ConflictHandler(SkillHandler):
             name = "conflictcmd"
 
-            async def handle(self, payload, args, skill):
+            async def handle(self, payload, args, skill, bot):
                 await payload.respond("Skill response")
 
         register_skill(ConflictHandler())

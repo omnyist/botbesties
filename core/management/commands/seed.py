@@ -6,9 +6,11 @@ import string
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
+from core.models import Alias
 from core.models import Bot
 from core.models import Channel
 from core.models import Command as BotCommand
+from core.models import Counter
 
 SEED_DATA = {
     "users": [
@@ -219,5 +221,49 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"    {status} command: !{cmd.name} ({cmd.type})"
+                )
+            )
+
+        # --- Counters ---
+
+        spoonee_counters = [
+            {"name": "death", "label": "Deaths"},
+            {"name": "scare", "label": "Scares"},
+        ]
+
+        for counter_data in spoonee_counters:
+            counter, created = Counter.objects.get_or_create(
+                channel=channel,
+                name=counter_data["name"],
+                defaults={"value": 0, "label": counter_data["label"]},
+            )
+
+            status = "Created" if created else "Exists"
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"    {status} counter: {counter.name} ({counter.label})"
+                )
+            )
+
+        # --- Aliases (counter shortcuts) ---
+
+        spoonee_aliases = [
+            {"name": "ct", "target": "count death"},
+            {"name": "countadd", "target": "count death +"},
+            {"name": "addscare", "target": "count scare +"},
+            {"name": "scare", "target": "count scare"},
+        ]
+
+        for alias_data in spoonee_aliases:
+            alias, created = Alias.objects.get_or_create(
+                channel=channel,
+                name=alias_data["name"],
+                defaults={"target": alias_data["target"]},
+            )
+
+            status = "Created" if created else "Exists"
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"    {status} alias: !{alias.name} → !{alias.target}"
                 )
             )

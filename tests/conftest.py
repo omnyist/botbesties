@@ -24,6 +24,7 @@ class MockChatter:
     """Mocks twitchio.Chatter for tests."""
 
     name: str = "testuser"
+    display_name: str = "TestUser"
     id: int = 12345
     moderator: bool = False
     broadcaster: bool = False
@@ -34,6 +35,7 @@ class MockBroadcaster:
     """Mocks the broadcaster object on ChatMessage."""
 
     name: str = "testchannel"
+    display_name: str = "TestChannel"
     id: int = 99999
 
 
@@ -56,13 +58,13 @@ def mock_chatter():
 @pytest.fixture()
 def mock_mod_chatter():
     """Create a moderator chatter."""
-    return MockChatter(name="moduser", id=11111, moderator=True)
+    return MockChatter(name="moduser", display_name="ModUser", id=11111, moderator=True)
 
 
 @pytest.fixture()
 def mock_broadcaster_chatter():
     """Create a broadcaster chatter."""
-    return MockChatter(name="broadcastuser", id=22222, broadcaster=True)
+    return MockChatter(name="broadcastuser", display_name="BroadcastUser", id=22222, broadcaster=True)
 
 
 @pytest.fixture()

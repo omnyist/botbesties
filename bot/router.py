@@ -116,8 +116,16 @@ class CommandRouter(commands.Component):
             cmd.use_count += 1
             await sync_to_async(cmd.save)(update_fields=["use_count"])
 
-            chatter_name = payload.chatter.name if payload.chatter else "someone"
-            channel_name = payload.broadcaster.name if payload.broadcaster else ""
+            chatter_name = (
+                payload.chatter.display_name
+                if payload.chatter
+                else "someone"
+            )
+            channel_name = (
+                payload.broadcaster.display_name
+                if payload.broadcaster
+                else ""
+            )
             target_arg = (
                 raw_args.split()[0].lstrip("@") if raw_args else chatter_name
             )
@@ -162,7 +170,7 @@ class CommandRouter(commands.Component):
 
             handler = SKILL_REGISTRY[cmd_name]
             try:
-                await handler.handle(payload, raw_args, skill)
+                await handler.handle(payload, raw_args, skill, self.bot)
             except Exception:
                 logger.exception(
                     "Skill handler '%s' failed",
@@ -188,7 +196,6 @@ class CommandRouter(commands.Component):
 
         if cmd.type == Command.Type.LOTTERY:
             odds = cmd.config.get("odds", 5)
-            chatter_name = payload.chatter.name if payload.chatter else "someone"
             if random.randint(1, 100) <= odds:
                 template = cmd.config.get("success", "$(user) wins!")
             else:
