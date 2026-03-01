@@ -16,6 +16,7 @@ def process_variables(
     response: str,
     *,
     user: str,
+    target: str,
     channel: str,
     count: int,
 ) -> str:
@@ -23,6 +24,7 @@ def process_variables(
 
     Supported variables:
         $(user)          — Username who triggered the command
+        $(target)        — First argument after the command (mentioned user)
         $(channel)       — Current channel name
         $(count)         — Command use count
         $(random N-M)    — Random number in range
@@ -36,6 +38,8 @@ def process_variables(
 
         if var_name == "user":
             return user
+        elif var_name == "target":
+            return target
         elif var_name == "channel":
             return channel
         elif var_name == "count":
@@ -104,11 +108,25 @@ class DynamicCommands(commands.Component):
         chatter_name = payload.chatter.name if payload.chatter else "someone"
         channel_name = payload.broadcaster.name if payload.broadcaster else ""
 
+        # Extract target (first argument after the command name)
+        args = parts[1] if len(parts) > 1 else ""
+        target = args.split()[0].lstrip("@") if args else chatter_name
+
         response = process_variables(
             cmd.response,
             user=chatter_name,
+            target=target,
             channel=channel_name,
             count=cmd.use_count,
         )
 
-        await payload.respond(response)
+        # Handle /me action messages
+        use_me = False
+        if response.startswith("/me "):
+            use_me = True
+            response = response[4:]
+            # Strip the common "- " separator used in Spoonee's commands
+            if response.startswith("- "):
+                response = response[2:]
+
+        await payload.respond(response, me=use_me)
