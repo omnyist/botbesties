@@ -9,12 +9,16 @@ logger = logging.getLogger("bot")
 
 
 class ManagementCommands(commands.Component):
-    """Built-in commands for managing text commands via chat.
+    """Built-in commands for managing text commands, aliases, and counters.
 
     !addcom <name> <response>  — Create a new command (mod/broadcaster only)
     !editcom <name> <response> — Edit an existing command (mod/broadcaster only)
     !delcom <name>             — Delete a command (mod/broadcaster only)
     !commands                  — List all enabled commands
+    !alias <name> <target>     — Create a command alias (mod/broadcaster only)
+    !unalias <name>            — Remove a command alias (mod/broadcaster only)
+    !aliases                   — List all aliases
+    !counters                  — List all counters and their values
     """
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -164,3 +168,124 @@ class ManagementCommands(commands.Component):
             await ctx.send(f"Commands: {names_str}")
         else:
             await ctx.send("No commands have been added yet.")
+
+    # --- Alias management ---
+
+    @commands.command(name="alias")
+    async def add_alias(self, ctx: commands.Context, name: str, *, target: str) -> None:
+        """Create a command alias."""
+        if not self._is_privileged(ctx):
+            return
+
+        channel = await self._get_channel(str(ctx.broadcaster.id))
+        if not channel:
+            return
+
+        from core.models import Alias
+
+        name = name.lstrip("!")
+
+        exists = await sync_to_async(
+            Alias.objects.filter(channel=channel, name=name).exists
+        )()
+        if exists:
+            await ctx.send(f"Alias !{name} already exists. Use !unalias first.")
+            return
+
+        await sync_to_async(Alias.objects.create)(
+            channel=channel,
+            name=name,
+            target=target,
+        )
+
+        await ctx.send(f"Alias !{name} → !{target} created.")
+        logger.info(
+            "[%s] Alias !%s → !%s created by %s",
+            self.bot.bot_name,
+            name,
+            target,
+            ctx.chatter.name if ctx.chatter else "unknown",
+        )
+
+    @commands.command(name="unalias")
+    async def remove_alias(self, ctx: commands.Context, name: str) -> None:
+        """Remove a command alias."""
+        if not self._is_privileged(ctx):
+            return
+
+        channel = await self._get_channel(str(ctx.broadcaster.id))
+        if not channel:
+            return
+
+        from core.models import Alias
+
+        name = name.lstrip("!")
+
+        try:
+            alias = await sync_to_async(Alias.objects.get)(
+                channel=channel, name=name
+            )
+        except Alias.DoesNotExist:
+            await ctx.send(f"Alias !{name} does not exist.")
+            return
+
+        await sync_to_async(alias.delete)()
+
+        await ctx.send(f"Alias !{name} has been removed.")
+        logger.info(
+            "[%s] Alias !%s removed by %s",
+            self.bot.bot_name,
+            name,
+            ctx.chatter.name if ctx.chatter else "unknown",
+        )
+
+    @commands.command(name="aliases")
+    async def list_aliases(self, ctx: commands.Context) -> None:
+        """List all aliases for this channel."""
+        channel = await self._get_channel(str(ctx.broadcaster.id))
+        if not channel:
+            return
+
+        from core.models import Alias
+
+        alias_list = await sync_to_async(
+            lambda: list(
+                Alias.objects.filter(channel=channel)
+                .order_by("name")
+                .values_list("name", "target")
+            )
+        )()
+
+        if alias_list:
+            entries = ", ".join(f"!{name} → !{target}" for name, target in alias_list)
+            await ctx.send(f"Aliases: {entries}")
+        else:
+            await ctx.send("No aliases have been created yet.")
+
+    # --- Counter listing ---
+
+    @commands.command(name="counters")
+    async def list_counters(self, ctx: commands.Context) -> None:
+        """List all counters and their values for this channel."""
+        channel = await self._get_channel(str(ctx.broadcaster.id))
+        if not channel:
+            return
+
+        from core.models import Counter
+
+        counter_list = await sync_to_async(
+            lambda: list(
+                Counter.objects.filter(channel=channel)
+                .order_by("name")
+                .values_list("name", "label", "value")
+            )
+        )()
+
+        if counter_list:
+            entries = ", ".join(
+                f"{label or name.title()}: {value}"
+                for name, label, value in counter_list
+            )
+            await ctx.send(f"Counters: {entries}")
+        else:
+            await ctx.send("No counters have been created yet.")
