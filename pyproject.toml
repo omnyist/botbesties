@@ -1,0 +1,96 @@
+[project]
+name = "botbesties"
+version = "0.1.0"
+description = "Self-hostable Twitch bot platform for friends."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "channels[daphne]>=4.3.2",
+    "django>=5.2",
+    "django-environ>=0.12.0",
+    "django-fernet-encrypted-fields>=0.3.1",
+    "django-ninja>=1.5.0",
+    "httpx>=0.28.0",
+    "psycopg>=3.3.0",
+    "redis>=6.0.0",
+    "twitchio>=3.2.1",
+    "whitenoise>=6.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.12.10",
+]
+
+[tool.ruff]
+exclude = [
+  ".bzr",
+  ".direnv",
+  ".eggs",
+  ".git",
+  ".github",
+  ".hg",
+  ".mypy_cache",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  "__pypackages__",
+  "_build",
+  "build",
+  "dist",
+  "migrations",
+  "node_modules",
+  "venv"
+]
+extend-include = ["*.pyi?"]
+indent-width = 4
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.format]
+indent-style = "space"
+line-ending = "auto"
+quote-style = "double"
+
+[tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+fixable = ["A", "B", "C", "D", "E", "F", "I"]
+ignore = [
+  "E501",
+  "E741",
+  "S101",
+  "S104",
+  "S603",
+  "S607",
+  "S311",
+  "RUF005",
+  "RUF010",
+  "RUF012",
+  "RUF019",
+  "RUF100",
+  "DJ001",
+  "UP038",
+]
+select = [
+  "B",
+  "C4",
+  "DJ",
+  "E",
+  "F",
+  "I",
+  "RUF",
+  "UP",
+]
+unfixable = []
+
+[tool.ruff.lint.isort]
+force-single-line = true
+known-first-party = ["botbesties", "core", "bot"]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = ["PLR2004", "S101", "TID252"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
