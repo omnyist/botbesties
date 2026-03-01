@@ -64,17 +64,31 @@ class Channel(models.Model):
 
 
 class Command(models.Model):
-    """A text command defined via chat (!addcom) or admin.
+    """A command triggered by !name in chat.
+
+    The type determines how the response is chosen and what side effects happen:
+    - text: Static response template from `response` field
+    - lottery: Roll odds, pick success or failure from `config`
+    - random_list: Random pick from `config["responses"]`
+    - counter: Auto-increment a named counter, then respond with `response` template
 
     Response text supports variables like $(user), $(channel), $(uses).
     """
+
+    class Type(models.TextChoices):
+        TEXT = "text", "Text"
+        LOTTERY = "lottery", "Lottery"
+        RANDOM_LIST = "random_list", "Random List"
+        COUNTER = "counter", "Counter"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel = models.ForeignKey(
         Channel, on_delete=models.CASCADE, related_name="commands"
     )
     name = models.CharField(max_length=100)
-    response = models.TextField()
+    type = models.CharField(max_length=20, choices=Type.choices, default=Type.TEXT)
+    response = models.TextField(blank=True, default="")
+    config = models.JSONField(default=dict, blank=True)
 
     enabled = models.BooleanField(default=True)
     use_count = models.PositiveIntegerField(default=0)

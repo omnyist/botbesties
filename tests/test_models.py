@@ -101,6 +101,37 @@ class TestCommandModel:
         assert cmd.enabled is True
         assert cmd.use_count == 0
 
+    def test_default_type_is_text(self, make_command):
+        from core.models import Command
+
+        cmd = make_command(name="hello")
+        assert cmd.type == Command.Type.TEXT
+
+    def test_type_choices(self, make_command):
+        from core.models import Command
+
+        cmd = make_command(name="flask", type=Command.Type.LOTTERY)
+        assert cmd.type == "lottery"
+
+        cmd2 = make_command(name="conch", type=Command.Type.RANDOM_LIST)
+        assert cmd2.type == "random_list"
+
+        cmd3 = make_command(name="death", type=Command.Type.COUNTER)
+        assert cmd3.type == "counter"
+
+    def test_config_default_is_empty_dict(self, make_command):
+        cmd = make_command(name="hello")
+        assert cmd.config == {}
+
+    def test_config_stores_json(self, make_command):
+        cmd = make_command(
+            name="flask",
+            type="lottery",
+            config={"odds": 5, "success": "Win!", "failure": "Lose!"},
+        )
+        assert cmd.config["odds"] == 5
+        assert cmd.config["success"] == "Win!"
+
     def test_str(self, make_command):
         cmd = make_command(name="hello")
         assert "!hello" in str(cmd)
@@ -120,6 +151,10 @@ class TestCommandModel:
         cmd.save(update_fields=["use_count"])
         cmd.refresh_from_db()
         assert cmd.use_count == 1
+
+    def test_response_blank_allowed(self, make_command):
+        cmd = make_command(name="flask", type="lottery", response="")
+        assert cmd.response == ""
 
 
 @pytest.mark.django_db

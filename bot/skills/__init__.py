@@ -40,7 +40,10 @@ def register_skill(handler: SkillHandler) -> None:
 
 
 def discover_skills() -> None:
-    """Import all skill modules to trigger registration."""
-    from bot.skills import conch  # noqa: F401
-    from bot.skills import counter  # noqa: F401
-    from bot.skills import flask  # noqa: F401
+    """Import all skill modules to trigger registration.
+
+    Simple behaviors (conch, flask, counter) are now command types
+    handled inline by the router. This function registers only
+    complex Python-coded skill handlers.
+    """
+    pass

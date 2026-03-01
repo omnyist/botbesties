@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 
 from bot.skills import SKILL_REGISTRY
+from bot.skills import SkillHandler
 from bot.skills import discover_skills
-from bot.skills.conch import ConchHandler
-from bot.skills.conch import DEFAULT_RESPONSES
-from bot.skills.counter import CounterHandler
-from bot.skills.flask import FlaskHandler
 from tests.conftest import MockBroadcaster
 from tests.conftest import MockChatter
 from tests.conftest import MockPayload
@@ -19,238 +16,319 @@ from tests.conftest import MockPayload
 
 
 class TestSkillRegistry:
-    def test_discover_skills_populates_registry(self):
+    def test_discover_skills_runs_without_error(self):
         discover_skills()
-        assert "conch" in SKILL_REGISTRY
-        assert "getyeflask" in SKILL_REGISTRY
-        assert "count" in SKILL_REGISTRY
 
-    def test_handler_types(self):
-        discover_skills()
-        assert isinstance(SKILL_REGISTRY["conch"], ConchHandler)
-        assert isinstance(SKILL_REGISTRY["getyeflask"], FlaskHandler)
-        assert isinstance(SKILL_REGISTRY["count"], CounterHandler)
+    def test_registry_is_dict(self):
+        assert isinstance(SKILL_REGISTRY, dict)
+
+    def test_skill_handler_base_class_raises(self):
+        handler = SkillHandler()
+        assert handler.name == ""
 
 
-# --- Conch skill tests ---
-
-
-class TestConchHandler:
-    async def test_responds_with_default_response(self):
-        handler = ConchHandler()
-        payload = MockPayload()
-        skill = _mock_skill(config={})
-
-        await handler.handle(payload, "Will it rain?", skill)
-
-        payload.respond.assert_called_once()
-        response = payload.respond.call_args[0][0]
-        assert response.startswith("🐚 ")
-        # Strip emoji prefix and check it's a valid response
-        answer = response[2:].strip()
-        assert answer in DEFAULT_RESPONSES
-
-    async def test_uses_custom_responses_from_config(self):
-        handler = ConchHandler()
-        payload = MockPayload()
-        custom = ["Always.", "Never."]
-        skill = _mock_skill(config={"responses": custom})
-
-        await handler.handle(payload, "question", skill)
-
-        response = payload.respond.call_args[0][0]
-        answer = response[2:].strip()
-        assert answer in custom
-
-
-# --- Flask skill tests ---
-
-
-class TestFlaskHandler:
-    async def test_success_message(self):
-        handler = FlaskHandler()
-        payload = MockPayload(
-            chatter=MockChatter(name="Bryan"),
-        )
-        # Set odds to 100% for deterministic success
-        skill = _mock_skill(config={
-            "odds": 100,
-            "success": "{user} got ye flask! 🎉",
-            "failure": "Nope.",
-        })
-
-        await handler.handle(payload, "", skill)
-
-        payload.respond.assert_called_once_with("Bryan got ye flask! 🎉")
-
-    async def test_failure_message(self):
-        handler = FlaskHandler()
-        payload = MockPayload(
-            chatter=MockChatter(name="Bryan"),
-        )
-        # Set odds to 0% for deterministic failure
-        skill = _mock_skill(config={
-            "odds": 0,
-            "failure": "You can't get ye flask!",
-        })
-
-        await handler.handle(payload, "", skill)
-
-        payload.respond.assert_called_once_with("You can't get ye flask!")
-
-    async def test_default_config(self):
-        handler = FlaskHandler()
-        payload = MockPayload(
-            chatter=MockChatter(name="Tester"),
-        )
-        skill = _mock_skill(config={})
-
-        await handler.handle(payload, "", skill)
-
-        payload.respond.assert_called_once()
-        response = payload.respond.call_args[0][0]
-        assert "Tester" in response or "flask" in response.lower()
-
-    async def test_no_chatter_uses_someone(self):
-        handler = FlaskHandler()
-        payload = MockPayload(chatter=None)
-        skill = _mock_skill(config={"odds": 100, "success": "{user} won!"})
-
-        await handler.handle(payload, "", skill)
-
-        payload.respond.assert_called_once_with("someone won!")
-
-
-# --- Counter skill tests ---
+# --- Command type dispatch tests ---
+# These test the router's _resolve_response method via full event_message flow.
+# Type-specific behavior tests are in test_router.py alongside text command tests.
 
 
 @pytest.mark.django_db(transaction=True)
-class TestCounterHandler:
-    async def test_show_counter_value(self, make_counter):
-        make_counter(name="death", value=5, label="Death Count")
-        handler = CounterHandler()
-        payload = _counter_payload()
+class TestLotteryType:
+    async def test_lottery_success_at_100_percent(self, make_command):
+        from bot.router import CommandRouter
+        from tests.conftest import MockBroadcaster
+        from tests.conftest import MockPayload
+        from unittest.mock import MagicMock
 
-        await handler.handle(payload, "death", _mock_skill())
-
-        payload.respond.assert_called_once_with("Death Count: 5")
-
-    async def test_show_missing_counter(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload()
-
-        await handler.handle(payload, "nonexistent", _mock_skill())
-
-        payload.respond.assert_called_once_with(
-            "Counter 'nonexistent' does not exist."
+        make_command(
+            name="flask",
+            type="lottery",
+            response="",
+            config={
+                "odds": 100,
+                "success": "$(user) wins!",
+                "failure": "Nope!",
+            },
         )
 
-    async def test_increment_creates_counter(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
 
-        await handler.handle(payload, "death +", _mock_skill())
+        payload = MockPayload(
+            text="!flask",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        assert "Death: 1" in response
+        assert response == "testuser wins!"
 
-    async def test_increment_existing_counter(self, make_counter):
-        make_counter(name="death", value=10, label="Deaths")
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
+    async def test_lottery_failure_at_0_percent(self, make_command):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
 
-        await handler.handle(payload, "death +", _mock_skill())
-
-        payload.respond.assert_called_once_with("Deaths: 11")
-
-    async def test_decrement(self, make_counter):
-        make_counter(name="death", value=10, label="Deaths")
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
-
-        await handler.handle(payload, "death -", _mock_skill())
-
-        payload.respond.assert_called_once_with("Deaths: 9")
-
-    async def test_set_value(self, make_counter):
-        make_counter(name="death", value=10, label="Deaths")
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
-
-        await handler.handle(payload, "death set 42", _mock_skill())
-
-        payload.respond.assert_called_once_with("Deaths: 42")
-
-    async def test_set_invalid_value(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
-
-        await handler.handle(payload, "death set abc", _mock_skill())
-
-        payload.respond.assert_called_once_with("Value must be a number.")
-
-    async def test_set_missing_value(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
-
-        await handler.handle(payload, "death set", _mock_skill())
-
-        payload.respond.assert_called_once_with("Usage: !count <name> set <N>")
-
-    async def test_no_args_shows_usage(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload()
-
-        await handler.handle(payload, "", _mock_skill())
-
-        payload.respond.assert_called_once_with(
-            "Usage: !count <name> [+|-|set <N>]"
+        make_command(
+            name="flask",
+            type="lottery",
+            response="",
+            config={
+                "odds": 0,
+                "success": "Win!",
+                "failure": "You can't get ye flask, $(user)!",
+            },
         )
 
-    async def test_non_mod_cannot_increment(self, make_counter):
-        make_counter(name="death", value=10)
-        handler = CounterHandler()
-        # Regular user, not a mod
-        payload = _counter_payload(moderator=False)
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
 
-        await handler.handle(payload, "death +", _mock_skill())
+        payload = MockPayload(
+            text="!flask",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response == "You can't get ye flask, testuser!"
+
+    async def test_lottery_increments_use_count(self, make_command):
+        from bot.router import CommandRouter
+        from core.models import Command
+        from unittest.mock import MagicMock
+
+        cmd = make_command(
+            name="flask",
+            type="lottery",
+            config={"odds": 100, "success": "Win!", "failure": "Lose!"},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!flask",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        cmd.refresh_from_db()
+        assert cmd.use_count == 1
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRandomListType:
+    async def test_random_list_picks_from_responses(self, make_command):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
+
+        responses = ["Yes.", "No.", "Maybe."]
+        make_command(
+            name="conch",
+            type="random_list",
+            config={"responses": responses},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!conch question?",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response in responses
+
+    async def test_random_list_with_prefix(self, make_command):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
+
+        make_command(
+            name="conch",
+            type="random_list",
+            config={"prefix": "\U0001f41a ", "responses": ["Yes."]},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!conch",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response == "\U0001f41a Yes."
+
+    async def test_random_list_empty_responses_uses_response_field(
+        self, make_command
+    ):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
+
+        make_command(
+            name="conch",
+            type="random_list",
+            response="No responses configured.",
+            config={"responses": []},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!conch",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response == "No responses configured."
+
+    async def test_random_list_empty_responses_no_fallback(self, make_command):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
+
+        make_command(
+            name="conch",
+            type="random_list",
+            response="",
+            config={"responses": []},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!conch",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
 
         payload.respond.assert_not_called()
 
-    async def test_label_falls_back_to_title(self, channel):
-        handler = CounterHandler()
-        payload = _counter_payload(moderator=True)
+    async def test_random_list_processes_variables(self, make_command):
+        from bot.router import CommandRouter
+        from unittest.mock import MagicMock
 
-        await handler.handle(payload, "scare +", _mock_skill())
+        make_command(
+            name="greet",
+            type="random_list",
+            config={"responses": ["Hello $(user)!"]},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!greet",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
 
         payload.respond.assert_called_once()
         response = payload.respond.call_args[0][0]
-        # Label defaults to name.title()
-        assert response.startswith("Scare:")
+        assert response == "Hello testuser!"
 
 
-# --- Helpers ---
+@pytest.mark.django_db(transaction=True)
+class TestCounterType:
+    async def test_counter_type_auto_increments(self, make_command, channel):
+        from bot.router import CommandRouter
+        from core.models import Counter
+        from unittest.mock import MagicMock
 
+        Counter.objects.create(channel=channel, name="death", value=5)
+        make_command(
+            name="deaths",
+            type="counter",
+            response="$(count.get death) deaths so far.",
+            config={"counter_name": "death"},
+        )
 
-class _MockSkillConfig:
-    """Minimal skill mock with config dict access."""
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
 
-    def __init__(self, config=None):
-        self.config = config or {}
+        payload = MockPayload(
+            text="!deaths",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
 
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response == "6 deaths so far."
 
-def _mock_skill(config=None):
-    return _MockSkillConfig(config=config)
+        # Verify counter was incremented
+        counter = Counter.objects.get(channel=channel, name="death")
+        assert counter.value == 6
 
+    async def test_counter_type_creates_counter_if_missing(
+        self, make_command, channel
+    ):
+        from bot.router import CommandRouter
+        from core.models import Counter
+        from unittest.mock import MagicMock
 
-def _counter_payload(moderator=False):
-    """Create a payload for counter tests with the right broadcaster ID."""
-    return MockPayload(
-        chatter=MockChatter(
-            name="testuser",
-            moderator=moderator,
-            broadcaster=False,
-        ),
-        broadcaster=MockBroadcaster(id=99999),
-    )
+        make_command(
+            name="gotcha",
+            type="counter",
+            response="$(count.get gotcha) bitches gotcha'd.",
+            config={"counter_name": "gotcha"},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!gotcha",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        # Counter should be created and incremented to 1
+        counter = Counter.objects.get(channel=channel, name="gotcha")
+        assert counter.value == 1
+
+    async def test_counter_type_uses_command_name_as_default(
+        self, make_command, channel
+    ):
+        from bot.router import CommandRouter
+        from core.models import Counter
+        from unittest.mock import MagicMock
+
+        make_command(
+            name="death",
+            type="counter",
+            response="$(count.get death)",
+            config={},
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!death",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        counter = Counter.objects.get(channel=channel, name="death")
+        assert counter.value == 1

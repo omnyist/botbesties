@@ -13,7 +13,9 @@ commands_router = Router(tags=["commands"])
 class CommandSchema(Schema):
     id: uuid.UUID
     name: str
+    type: str
     response: str
+    config: dict
     enabled: bool
     use_count: int
     cooldown_seconds: int
@@ -22,7 +24,9 @@ class CommandSchema(Schema):
 
 class CommandCreateSchema(Schema):
     name: str
-    response: str
+    type: str = "text"
+    response: str = ""
+    config: dict = {}
     cooldown_seconds: int = 0
     mod_only: bool = False
 

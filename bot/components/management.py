@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from asgiref.sync import sync_to_async
+from django.db.models import F
 from twitchio.ext import commands
 
 logger = logging.getLogger("bot")
@@ -18,6 +19,7 @@ class ManagementCommands(commands.Component):
     !alias <name> <target>     — Create a command alias (mod/broadcaster only)
     !unalias <name>            — Remove a command alias (mod/broadcaster only)
     !aliases                   — List all aliases
+    !count <name> [+|-|set N]  — View or modify a counter (mutations mod/broadcaster)
     !counters                  — List all counters and their values
     """
 
@@ -262,7 +264,97 @@ class ManagementCommands(commands.Component):
         else:
             await ctx.send("No aliases have been created yet.")
 
-    # --- Counter listing ---
+    # --- Counter management ---
+
+    @commands.command(name="count")
+    async def count(self, ctx: commands.Context, *, args: str = "") -> None:
+        """View or modify a named counter.
+
+        !count <name>          — Show counter value (everyone)
+        !count <name> +        — Increment (mod/broadcaster)
+        !count <name> -        — Decrement (mod/broadcaster)
+        !count <name> set <N>  — Set to value (mod/broadcaster)
+        """
+        parts = args.split() if args else []
+        if not parts:
+            await ctx.send("Usage: !count <name> [+|-|set <N>]")
+            return
+
+        counter_name = parts[0].lower()
+        action = parts[1] if len(parts) > 1 else None
+        broadcaster_id = str(ctx.broadcaster.id)
+
+        from core.models import Counter
+
+        if action in ("+", "-", "set"):
+            if not self._is_privileged(ctx):
+                return
+
+            if action == "set":
+                if len(parts) < 3:
+                    await ctx.send("Usage: !count <name> set <N>")
+                    return
+                try:
+                    new_value = int(parts[2])
+                except ValueError:
+                    await ctx.send("Value must be a number.")
+                    return
+
+                channel = await self._get_channel(broadcaster_id)
+                if not channel:
+                    return
+
+                counter, created = await sync_to_async(
+                    Counter.objects.update_or_create
+                )(
+                    channel=channel,
+                    name=counter_name,
+                    defaults={"value": new_value},
+                )
+
+                label = counter.label or counter.name.title()
+                await ctx.send(f"{label}: {new_value}")
+                return
+
+            # Increment or decrement
+            delta = 1 if action == "+" else -1
+
+            channel = await self._get_channel(broadcaster_id)
+            if not channel:
+                return
+
+            counter, created = await sync_to_async(
+                Counter.objects.get_or_create
+            )(
+                channel=channel,
+                name=counter_name,
+                defaults={"value": 0},
+            )
+
+            # Atomic update
+            await sync_to_async(
+                Counter.objects.filter(pk=counter.pk).update
+            )(value=F("value") + delta)
+
+            # Refresh to get the updated value
+            await sync_to_async(counter.refresh_from_db)()
+            label = counter.label or counter.name.title()
+            await ctx.send(f"{label}: {counter.value}")
+            return
+
+        # No action — show the counter value
+        try:
+            counter = await sync_to_async(Counter.objects.get)(
+                channel__twitch_channel_id=broadcaster_id,
+                channel__is_active=True,
+                name=counter_name,
+            )
+        except Counter.DoesNotExist:
+            await ctx.send(f"Counter '{counter_name}' does not exist.")
+            return
+
+        label = counter.label or counter.name.title()
+        await ctx.send(f"{label}: {counter.value}")
 
     @commands.command(name="counters")
     async def list_counters(self, ctx: commands.Context) -> None:

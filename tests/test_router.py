@@ -45,6 +45,7 @@ class TestBuiltinCommands:
             "alias",
             "unalias",
             "aliases",
+            "count",
             "counters",
         ],
     )
@@ -54,7 +55,7 @@ class TestBuiltinCommands:
 
 @pytest.mark.django_db(transaction=True)
 class TestCommandRouterTextCommands:
-    """Test the text command fallback path."""
+    """Test the text command path."""
 
     async def test_responds_to_text_command(self, make_command):
         make_command(name="hello", response="Hello $(user)!")
@@ -204,6 +205,18 @@ class TestCommandRouterGuards:
 
         payload.respond.assert_not_called()
 
+    async def test_ignores_count_builtin(self, channel):
+        """!count is a builtin management command, not routed."""
+        router = _make_router()
+
+        payload = MockPayload(
+            text="!count death +",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_not_called()
+
     async def test_ignores_empty_command(self, channel):
         router = _make_router()
 
@@ -249,27 +262,27 @@ class TestCommandRouterAliases:
         response = payload.respond.call_args[0][0]
         assert response == "Hi from testuser!"
 
-    async def test_alias_with_args_prepends_to_user_args(
-        self, make_skill, make_alias, channel
+    async def test_alias_resolves_to_typed_command(
+        self, make_command, make_alias
     ):
-        make_skill(name="count")
-        make_alias(name="ct", target="count death")
-
-        from core.models import Counter
-
-        Counter.objects.create(
-            channel=channel, name="death", value=5, label="Deaths"
+        """Aliases work for all command types, not just text."""
+        make_command(
+            name="conch",
+            type="random_list",
+            config={"responses": ["Yes."]},
         )
-
+        make_alias(name="ask", target="conch")
         router = _make_router()
 
         payload = MockPayload(
-            text="!ct",
+            text="!ask",
             broadcaster=MockBroadcaster(id=99999),
         )
         await router.event_message(payload)
 
-        payload.respond.assert_called_once_with("Deaths: 5")
+        payload.respond.assert_called_once()
+        response = payload.respond.call_args[0][0]
+        assert response == "Yes."
 
     async def test_alias_nonexistent_does_nothing(self, channel):
         """An alias pointing to a non-existent command silently does nothing."""
@@ -290,49 +303,65 @@ class TestCommandRouterAliases:
 
 
 @pytest.mark.django_db(transaction=True)
-class TestCommandRouterSkills:
-    """Test skill dispatch in the router."""
+class TestCommandRouterSkillFallback:
+    """Test skill handler fallback for complex behaviors."""
 
-    async def test_dispatches_to_skill(self, make_skill):
-        make_skill(name="conch")
-        router = _make_router()
+    async def test_skill_fallback_dispatches(self, make_skill):
+        """Skill handlers still work for commands not in the Command table."""
+        from bot.skills import SKILL_REGISTRY
+        from bot.skills import SkillHandler
+        from bot.skills import register_skill
 
-        payload = MockPayload(
-            text="!conch Will it rain?",
-            broadcaster=MockBroadcaster(id=99999),
-        )
-        await router.event_message(payload)
+        class TestSkillHandler(SkillHandler):
+            name = "testskill"
 
-        payload.respond.assert_called_once()
-        response = payload.respond.call_args[0][0]
-        assert response.startswith("🐚 ")
+            async def handle(self, payload, args, skill):
+                await payload.respond(f"Skill response: {args}")
 
-    async def test_disabled_skill_does_nothing(self, make_skill):
-        make_skill(name="conch", enabled=False)
-        router = _make_router()
+        register_skill(TestSkillHandler())
 
-        payload = MockPayload(
-            text="!conch Will it rain?",
-            broadcaster=MockBroadcaster(id=99999),
-        )
-        await router.event_message(payload)
+        try:
+            make_skill(name="testskill")
+            router = _make_router()
 
-        payload.respond.assert_not_called()
+            payload = MockPayload(
+                text="!testskill hello",
+                broadcaster=MockBroadcaster(id=99999),
+            )
+            await router.event_message(payload)
 
-    async def test_skill_takes_priority_over_text_command(
+            payload.respond.assert_called_once_with("Skill response: hello")
+        finally:
+            SKILL_REGISTRY.pop("testskill", None)
+
+    async def test_command_takes_priority_over_skill(
         self, make_skill, make_command
     ):
-        """When a skill and text command share a name, skill wins."""
-        make_skill(name="conch")
-        make_command(name="conch", response="Text response")
-        router = _make_router()
+        """When a command and skill share a name, command wins."""
+        from bot.skills import SKILL_REGISTRY
+        from bot.skills import SkillHandler
+        from bot.skills import register_skill
 
-        payload = MockPayload(
-            text="!conch question?",
-            broadcaster=MockBroadcaster(id=99999),
-        )
-        await router.event_message(payload)
+        class ConflictHandler(SkillHandler):
+            name = "conflictcmd"
 
-        response = payload.respond.call_args[0][0]
-        # Should be the skill response (emoji), not "Text response"
-        assert response.startswith("🐚 ")
+            async def handle(self, payload, args, skill):
+                await payload.respond("Skill response")
+
+        register_skill(ConflictHandler())
+
+        try:
+            make_skill(name="conflictcmd")
+            make_command(name="conflictcmd", response="Command response")
+            router = _make_router()
+
+            payload = MockPayload(
+                text="!conflictcmd",
+                broadcaster=MockBroadcaster(id=99999),
+            )
+            await router.event_message(payload)
+
+            response = payload.respond.call_args[0][0]
+            assert response == "Command response"
+        finally:
+            SKILL_REGISTRY.pop("conflictcmd", None)

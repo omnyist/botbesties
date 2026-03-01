@@ -48,13 +48,14 @@ class ChannelAdmin(admin.ModelAdmin):
 class CommandAdmin(admin.ModelAdmin):
     list_display = (
         "name",
+        "type",
         "channel",
         "enabled",
         "mod_only",
         "use_count",
         "created_by",
     )
-    list_filter = ("channel", "enabled", "mod_only")
+    list_filter = ("channel", "type", "enabled", "mod_only")
     search_fields = ("name", "response")
     readonly_fields = ("use_count", "created_at", "updated_at")
     ordering = ["channel", "name"]

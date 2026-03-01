@@ -27,16 +27,49 @@ Two Docker containers share the same codebase and PostgreSQL database:
 
 - **Bot** — A Twitch bot identity (e.g., Elsydeon, WorldFriendshipBot). Holds encrypted OAuth tokens.
 - **Channel** — A channel where a bot is active. FK to Bot. Also stores the channel owner's OAuth tokens for moderation.
-- **Command** — A text command (e.g., `!lurk`) defined per channel. Response text supports variables. `created_by` tracks who created it (Twitch username from `!addcom`, or channel owner name from imports).
-- **Skill** — A Python-coded command toggled per channel. Logic lives in `bot/skills/` as handler classes, the model controls enable/disable and stores JSON config.
+- **Command** — A chat command (e.g., `!lurk`) defined per channel. The `type` field determines how the response is chosen (text, lottery, random_list, counter). The `config` JSONField stores type-specific settings. Response text supports variables. `created_by` tracks who created it (Twitch username from `!addcom`, or channel owner name from imports).
+- **Skill** — A Python-coded command toggled per channel. Used for complex built-in behaviors that need real Python logic (future: quotes, followage, API integrations). Logic lives in `bot/skills/` as handler classes, the model controls enable/disable and stores JSON config.
 - **Counter** — A named counter per channel (e.g., death count, scare count). Dedicated model with `IntegerField` for atomic `F()` updates. Readable in command responses via `$(count.get name)`.
-- **Alias** — A type-agnostic command alias per channel. Resolved early in the message pipeline to rewrite triggers before routing (e.g., `!ct` → `!count death`). Works for both text commands and skills.
+- **Alias** — A type-agnostic command alias per channel. Resolved early in the message pipeline to rewrite triggers before routing (e.g., `!ct` → `!count death`). Works for all command types and skills.
 
-## Commands vs Skills
+## Command Types
 
-**Commands** are text responses stored in the database. Anyone with mod/broadcaster permissions can create them via `!addcom`. They support variable substitution and `/me` action messages.
+Commands use a two-tier architecture: **command types** for config-driven behaviors, and **skill handlers** for complex Python-coded behaviors.
 
-**Skills** are Python handler classes in `bot/skills/`. They handle behavior that text responses can't: counters, API calls, file reads, conditional logic, games. Each skill is a `SkillHandler` subclass registered in `SKILL_REGISTRY` and dispatched by the `CommandRouter`.
+### Type-Based Commands
+
+The `type` field on the Command model determines how the response is chosen and what side effects happen. All types share the same response processing pipeline (variables, `/me` handling, use_count).
+
+| Type | Example | Response Source | Side Effect |
+|---|---|---|---|
+| `text` | `!lurk` | `command.response` template | None |
+| `lottery` | `!getyeflask` | Roll `config["odds"]` → pick `config["success"]` or `config["failure"]` | None |
+| `random_list` | `!conch` | Random pick from `config["responses"]`, optional `config["prefix"]` | None |
+| `counter` | `!deaths` | `command.response` template (uses `$(count.get name)`) | Auto-increment named counter |
+
+### Config Schemas
+
+**lottery:**
+```json
+{"odds": 2, "success": "$(user) wins!", "failure": "Better luck next time!"}
+```
+`odds` is a percentage (1-100). Success/failure templates support variables.
+
+**random_list:**
+```json
+{"prefix": "🐚 ", "responses": ["Yes.", "No.", "Maybe."]}
+```
+`prefix` is optional, prepended to the chosen response. Responses support variables.
+
+**counter:**
+```json
+{"counter_name": "death"}
+```
+`counter_name` defaults to the command name if omitted. The counter is auto-incremented before variable processing so `$(count.get name)` returns the updated value.
+
+### Skill Handlers
+
+Skills are Python handler classes in `bot/skills/` for complex built-in behaviors that need real Python logic (future: quotes, followage, API integrations). Each skill is a `SkillHandler` subclass registered in `SKILL_REGISTRY`. The router checks commands first, then falls back to skill handlers.
 
 ## Message Processing Pipeline
 
@@ -44,10 +77,15 @@ The `CommandRouter` (`bot/router.py`) is a TwitchIO Component with a single `eve
 
 1. **Self-message guard** — Skip if chatter is the bot itself
 2. **Prefix check** — Skip if message doesn't start with `!`
-3. **Skip built-in commands** — Management commands handled by `ManagementCommands`
+3. **Skip built-in commands** — Management commands handled by `ManagementCommands` (`addcom`, `editcom`, `delcom`, `commands`, `id`, `alias`, `unalias`, `aliases`, `count`, `counters`)
 4. **Alias resolution** — Rewrite trigger via `Alias` model (e.g., `!ct` → `!count death`)
-5. **Skill dispatch** — Look up handler in `SKILL_REGISTRY`, call `handler.handle()`
-6. **Text command fallback** — Look up in `Command` table, process variables, respond
+5. **Command lookup** — Query `Command` table by channel + name. If found and enabled, dispatch by type:
+   - `text`: use `command.response`
+   - `lottery`: roll odds → pick success or failure from config
+   - `random_list`: random pick from `config["responses"]`, prepend prefix
+   - `counter`: auto-increment named counter, use `command.response`
+   - Common pipeline: increment use_count → build VariableContext → process variables → handle `/me` → respond
+6. **Skill handler fallback** — Look up handler in `SKILL_REGISTRY`, query `Skill` model, call `handler.handle()`
 
 ## Variable System
 
@@ -120,7 +158,7 @@ For importing commands from DeepBot, these map to our system:
 | Command | Description |
 |---|---|
 | `manage.py runbot` | Start all active bot instances |
-| `manage.py seed` | Create initial users, bots, and channels |
+| `manage.py seed` | Create initial users, bots, channels, and Spoonee's channel commands |
 | `manage.py importcommands <json> --channel <name>` | Bulk import commands from JSON. Use `--dry-run` to preview. Sets `created_by` to channel owner name |
 
 ### Import JSON Format
@@ -149,8 +187,8 @@ For importing commands from DeepBot, these map to our system:
 | `!aliases` | Everyone | List all aliases |
 | `!count <name> [+\|-\|set N]` | Mod/Broadcaster (mutations) | View or modify a counter |
 | `!counters` | Everyone | List all counters |
-| `!conch [question]` | Everyone | Magic Conch Shell (skill) |
-| `!getyeflask` | Everyone | Random chance game (skill) |
+| `!conch [question]` | Everyone | Magic Conch Shell (random_list command) |
+| `!getyeflask` | Everyone | Random chance game (lottery command) |
 | `!id` | Everyone | Show the bot's Twitch user ID |
 
 ## Deployment
