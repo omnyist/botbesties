@@ -321,7 +321,7 @@ class TestLotteryCooldown:
                 "success": "Win!",
                 "failure": "Lose!",
                 "cooldown": 3600,
-                "cooldown_response": "$(user), $(remaining) left!",
+                "cooldown_response": "$(user), you have $(remaining) seconds left.",
             },
         )
 
@@ -336,7 +336,7 @@ class TestLotteryCooldown:
         await router.event_message(payload1)
         payload1.respond.assert_called_once()
 
-        # Second attempt — should include remaining time
+        # Second attempt — should include remaining seconds
         payload2 = MockPayload(
             text="!flask",
             broadcaster=MockBroadcaster(id=99999),
@@ -344,11 +344,12 @@ class TestLotteryCooldown:
         await router.event_message(payload2)
         payload2.respond.assert_called_once()
         response = payload2.respond.call_args[0][0]
-        # Should contain the user name and a time string
-        assert response.startswith("TestUser, ")
-        assert "left!" in response
-        # Time should be roughly "0h 59m" since nearly no time passed
-        assert "59m" in response
+        # Should contain user name and raw seconds (close to 3600)
+        assert response.startswith("TestUser, you have ")
+        assert response.endswith(" seconds left.")
+        # Extract the number and verify it's close to 3600
+        seconds = int(response.split("you have ")[1].split(" seconds")[0])
+        assert 3590 <= seconds <= 3600
 
 
 @pytest.mark.django_db(transaction=True)

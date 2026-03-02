@@ -203,7 +203,7 @@ class Command(BaseCommand):
                     "success": "$(user) - YOU GET YE FLASK! bardHype bardHype bardHype",
                     "failure": "You can't get ye flask, $(user)! bardPls",
                     "cooldown": 3600,
-                    "cooldown_response": "$(user), you can only try to get ye flask once per hour. $(remaining) left!",
+                    "cooldown_response": "$(user), you can only try to get ye flask once per hour. You have $(remaining) seconds left.",
                 },
             },
         ]

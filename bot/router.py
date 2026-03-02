@@ -221,18 +221,8 @@ class CommandRouter(commands.Component):
                         remaining = int(
                             cooldown_secs - (now - last_used)
                         )
-                        # Format remaining time as human-readable
-                        if remaining >= 3600:
-                            minutes = (remaining % 3600) // 60
-                            remaining_str = (
-                                f"{remaining // 3600}h {minutes}m"
-                            )
-                        elif remaining >= 60:
-                            remaining_str = f"{remaining // 60}m {remaining % 60}s"
-                        else:
-                            remaining_str = f"{remaining}s"
                         cooldown_response = cooldown_response.replace(
-                            "$(remaining)", remaining_str
+                            "$(remaining)", str(remaining)
                         )
                         return ResolvedResponse(
                             text=cooldown_response, skip_use_count=True
