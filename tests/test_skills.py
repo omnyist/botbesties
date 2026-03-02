@@ -32,10 +32,10 @@ class TestSkillRegistry:
         handler = SkillHandler()
         assert handler.name == ""
 
-    def test_discover_skills_registers_checkme(self):
+    def test_discover_skills_registers_followage(self):
         discover_skills()
-        assert "checkme" in SKILL_REGISTRY
-        assert isinstance(SKILL_REGISTRY["checkme"], FollowCheckHandler)
+        assert "followage" in SKILL_REGISTRY
+        assert isinstance(SKILL_REGISTRY["followage"], FollowCheckHandler)
 
 
 # --- Command type dispatch tests ---
@@ -745,7 +745,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         followed_at = (
@@ -774,7 +774,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
 
@@ -794,7 +794,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         api_response = _mock_twitch_response(
@@ -809,7 +809,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
 
@@ -829,7 +829,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         bot = MagicMock()
@@ -841,7 +841,7 @@ class TestFollowCheckHandler:
 
         # Chatter ID matches broadcaster ID
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             chatter=MockChatter(
                 name="testchannel",
                 display_name="TestChannel",
@@ -861,7 +861,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         bot = MagicMock()
@@ -872,7 +872,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
         await router.event_message(payload)
@@ -892,7 +892,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         bot = MagicMock()
@@ -903,7 +903,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
 
@@ -924,7 +924,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=False
+            channel=channel, name="followage", enabled=False
         )
 
         bot = MagicMock()
@@ -935,7 +935,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
         await router.event_message(payload)
@@ -949,7 +949,7 @@ class TestFollowCheckHandler:
         from core.models import Skill
 
         Skill.objects.create(
-            channel=channel, name="checkme", enabled=True
+            channel=channel, name="followage", enabled=True
         )
 
         followed_at = datetime.now(UTC).strftime(
@@ -978,7 +978,7 @@ class TestFollowCheckHandler:
         router = CommandRouter(bot)
 
         payload = MockPayload(
-            text="!checkme",
+            text="!followage",
             broadcaster=MockBroadcaster(id=99999),
         )
 

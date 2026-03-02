@@ -16,9 +16,9 @@ logger = logging.getLogger("bot")
 
 
 class FollowCheckHandler(SkillHandler):
-    """!checkme — Check if the chatter follows the channel and for how long."""
+    """!followage — Check if the chatter follows the channel and for how long."""
 
-    name = "checkme"
+    name = "followage"
 
     async def handle(self, payload, args, skill, bot):
         chatter = payload.chatter

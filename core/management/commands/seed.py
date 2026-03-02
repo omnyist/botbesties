@@ -276,7 +276,8 @@ class Command(BaseCommand):
             {"name": "countadd", "target": "count death +"},
             {"name": "addscare", "target": "count scare +"},
             {"name": "scare", "target": "count scare"},
-            {"name": "followcheck", "target": "checkme"},
+            {"name": "followcheck", "target": "followage"},
+            {"name": "checkme", "target": "followage"},
         ]
 
         for alias_data in spoonee_aliases:
@@ -419,7 +420,7 @@ class Command(BaseCommand):
         # --- Aliases ---
 
         avalonstar_aliases = [
-            {"name": "followage", "target": "checkme"},
+            {"name": "checkme", "target": "followage"},
         ]
 
         for alias_data in avalonstar_aliases:
@@ -439,7 +440,7 @@ class Command(BaseCommand):
     def _seed_skills(self):
         """Seed skill records for all active channels."""
         skills_to_seed = [
-            {"name": "checkme"},
+            {"name": "followage"},
         ]
 
         for channel in Channel.objects.filter(is_active=True):

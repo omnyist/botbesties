@@ -125,17 +125,17 @@ class Command(BaseCommand):
 
             # --- Skip: commands whose entire text is a Moobot built-in ---
 
-            # <twitch.followed> → alias to !checkme
+            # <twitch.followed> → alias to !followage
             if "<twitch.followed>" in raw_text:
                 if not dry_run:
                     Alias.objects.get_or_create(
                         channel=channel,
                         name=name,
-                        defaults={"target": "checkme"},
+                        defaults={"target": "followage"},
                     )
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"  Alias: !{name} → !checkme (Moobot followage)"
+                        f"  Alias: !{name} → !followage (Moobot followage)"
                     )
                 )
                 alias_count += 1

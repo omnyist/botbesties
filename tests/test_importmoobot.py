@@ -188,7 +188,7 @@ class TestImportMoobotCommand:
         from core.models import Command
 
         alias = Alias.objects.get(channel=channel, name="followage")
-        assert alias.target == "checkme"
+        assert alias.target == "followage"
         assert not Command.objects.filter(channel=channel, name="followage").exists()
 
     def test_unsupported_variable_skipped(self, channel):
