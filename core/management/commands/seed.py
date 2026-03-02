@@ -209,7 +209,7 @@ class Command(BaseCommand):
         ]
 
         for cmd_data in spoonee_commands:
-            cmd, created = BotCommand.objects.get_or_create(
+            cmd, created = BotCommand.objects.update_or_create(
                 channel=channel,
                 name=cmd_data["name"],
                 defaults={
@@ -219,7 +219,7 @@ class Command(BaseCommand):
                 },
             )
 
-            status = "Created" if created else "Exists"
+            status = "Created" if created else "Updated"
             self.stdout.write(
                 self.style.SUCCESS(
                     f"    {status} command: !{cmd.name} ({cmd.type})"
