@@ -6,6 +6,7 @@ import twitchio
 from twitchio import eventsub, web
 from twitchio.ext import commands
 
+from .components.errors import ErrorHandler
 from .components.management import ManagementCommands
 from .router import CommandRouter
 
@@ -69,6 +70,7 @@ class BotClient(commands.Bot):
                     channel_info["name"],
                 )
 
+        await self.add_component(ErrorHandler(self))
         await self.add_component(ManagementCommands(self))
         await self.add_component(CommandRouter(self))
 
