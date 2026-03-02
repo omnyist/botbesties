@@ -1,21 +1,30 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from bot.variables import VARIABLE_PATTERN
 from bot.variables import ChannelHandler
 from bot.variables import CountHandler
+from bot.variables import GameHandler
 from bot.variables import IndexHandler
 from bot.variables import QueryHandler
 from bot.variables import RandomHandler
 from bot.variables import TargetHandler
+from bot.variables import UptimeHandler
 from bot.variables import UserHandler
 from bot.variables import UsesHandler
 from bot.variables import VariableContext
 from bot.variables import VariableRegistry
 from bot.variables import create_registry
+from bot.variables import format_uptime
 
 
 # --- Regex pattern tests ---
@@ -38,6 +47,8 @@ class TestVariablePattern:
             ("$(count.label death)", ("count", "label", "death")),
             ("$(random.range 1-100)", ("random", "range", "1-100")),
             ("$(random.pick heads,tails)", ("random", "pick", "heads,tails")),
+            ("$(uptime)", ("uptime", None, None)),
+            ("$(game)", ("game", None, None)),
         ],
     )
     def test_pattern_matches(self, text, expected):
@@ -232,6 +243,171 @@ class TestRandomHandler:
         assert len(descriptors) == 2
 
 
+def _mock_twitch_response(status_code=200, json_data=None):
+    """Create a mock httpx response for Twitch API calls."""
+    response = MagicMock()
+    response.status_code = status_code
+    response.json.return_value = json_data or {}
+    return response
+
+
+class TestUptimeHandler:
+    @pytest.mark.django_db(transaction=True)
+    async def test_live_stream_returns_uptime(self, channel, variable_context):
+        started_at = datetime.now(UTC) - timedelta(hours=3, minutes=42)
+        mock_response = _mock_twitch_response(
+            json_data={
+                "data": [
+                    {
+                        "started_at": started_at.strftime(
+                            "%Y-%m-%dT%H:%M:%SZ"
+                        ),
+                    }
+                ]
+            }
+        )
+        handler = UptimeHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == "3h 42m"
+
+    @pytest.mark.django_db(transaction=True)
+    async def test_offline_stream_returns_offline(
+        self, channel, variable_context
+    ):
+        mock_response = _mock_twitch_response(json_data={"data": []})
+        handler = UptimeHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == "offline"
+
+    @pytest.mark.django_db(transaction=True)
+    async def test_api_error_returns_offline(
+        self, channel, variable_context
+    ):
+        handler = UptimeHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == "offline"
+
+    async def test_no_channel_returns_offline(self, db, variable_context):
+        handler = UptimeHandler()
+        result = await handler.resolve(None, None, variable_context)
+        assert result == "offline"
+
+    def test_describe(self):
+        handler = UptimeHandler()
+        descriptors = handler.describe()
+        assert len(descriptors) == 1
+        assert descriptors[0].namespace == "uptime"
+        assert descriptors[0].example == "$(uptime)"
+
+
+class TestGameHandler:
+    @pytest.mark.django_db(transaction=True)
+    async def test_returns_game_name(self, channel, variable_context):
+        mock_response = _mock_twitch_response(
+            json_data={"data": [{"game_name": "Elden Ring"}]}
+        )
+        handler = GameHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == "Elden Ring"
+
+    @pytest.mark.django_db(transaction=True)
+    async def test_empty_game_returns_empty_string(
+        self, channel, variable_context
+    ):
+        mock_response = _mock_twitch_response(
+            json_data={"data": [{"game_name": ""}]}
+        )
+        handler = GameHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == ""
+
+    @pytest.mark.django_db(transaction=True)
+    async def test_api_error_returns_empty_string(
+        self, channel, variable_context
+    ):
+        handler = GameHandler()
+        with patch(
+            "core.twitch.twitch_request",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await handler.resolve(None, None, variable_context)
+        assert result == ""
+
+    async def test_no_channel_returns_empty_string(
+        self, db, variable_context
+    ):
+        handler = GameHandler()
+        result = await handler.resolve(None, None, variable_context)
+        assert result == ""
+
+    def test_describe(self):
+        handler = GameHandler()
+        descriptors = handler.describe()
+        assert len(descriptors) == 1
+        assert descriptors[0].namespace == "game"
+        assert descriptors[0].example == "$(game)"
+
+
+class TestFormatUptime:
+    def test_just_started(self):
+        started_at = datetime.now(UTC) - timedelta(seconds=30)
+        assert format_uptime(started_at) == "just started"
+
+    def test_minutes_only(self):
+        started_at = datetime.now(UTC) - timedelta(minutes=42)
+        assert format_uptime(started_at) == "42m"
+
+    def test_one_minute(self):
+        started_at = datetime.now(UTC) - timedelta(minutes=1)
+        assert format_uptime(started_at) == "1m"
+
+    def test_hours_and_minutes(self):
+        started_at = datetime.now(UTC) - timedelta(hours=3, minutes=42)
+        assert format_uptime(started_at) == "3h 42m"
+
+    def test_hours_zero_minutes(self):
+        started_at = datetime.now(UTC) - timedelta(hours=2)
+        assert format_uptime(started_at) == "2h 0m"
+
+    def test_days_hours_minutes(self):
+        started_at = datetime.now(UTC) - timedelta(
+            days=1, hours=5, minutes=20
+        )
+        assert format_uptime(started_at) == "1d 5h 20m"
+
+    def test_multiple_days(self):
+        started_at = datetime.now(UTC) - timedelta(
+            days=3, hours=12, minutes=30
+        )
+        assert format_uptime(started_at) == "3d 12h 30m"
+
+
 class TestQueryHandler:
     async def test_resolve(self, variable_context):
         handler = QueryHandler()
@@ -368,6 +544,8 @@ class TestCreateRegistry:
         assert "uses" in registry._handlers
         assert "count" in registry._handlers
         assert "random" in registry._handlers
+        assert "uptime" in registry._handlers
+        assert "game" in registry._handlers
         assert "query" in registry._handlers
         assert registry._index_handler is not None
 
@@ -386,6 +564,8 @@ class TestRegistrySchema:
         assert "uses" in namespaces
         assert "count" in namespaces
         assert "random" in namespaces
+        assert "uptime" in namespaces
+        assert "game" in namespaces
         assert "query" in namespaces
         # Index handler contributes "1", "2", "N"
         assert "1" in namespaces

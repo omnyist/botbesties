@@ -5,6 +5,8 @@ import logging
 import random
 import re
 from dataclasses import dataclass
+from datetime import UTC
+from datetime import datetime
 
 from asgiref.sync import sync_to_async
 
@@ -238,6 +240,126 @@ class RandomHandler(VariableHandler):
         ]
 
 
+class UptimeHandler(VariableHandler):
+    """$(uptime) — stream uptime, or 'offline' if not live."""
+
+    namespace = "uptime"
+
+    async def resolve(self, prop, args, context):
+        from core.models import Channel
+        from core.twitch import TWITCH_API_BASE
+        from core.twitch import twitch_request
+
+        try:
+            channel = await sync_to_async(Channel.objects.get)(
+                twitch_channel_id=context.broadcaster_id,
+                is_active=True,
+            )
+        except Channel.DoesNotExist:
+            return "offline"
+
+        response = await twitch_request(
+            channel,
+            "GET",
+            f"{TWITCH_API_BASE}/streams",
+            params={"user_id": context.broadcaster_id},
+        )
+        if response is None or response.status_code >= 400:
+            return "offline"
+
+        data = response.json()
+        if not data.get("data"):
+            return "offline"
+
+        started_at_str = data["data"][0]["started_at"]
+        started_at = datetime.fromisoformat(
+            started_at_str.replace("Z", "+00:00")
+        )
+        return format_uptime(started_at)
+
+    def describe(self):
+        return [
+            VariableDescriptor(
+                namespace="uptime",
+                property=None,
+                args_hint=None,
+                description=(
+                    "Stream uptime (e.g., '3h 42m'), "
+                    "or 'offline' if not live."
+                ),
+                example="$(uptime)",
+            ),
+        ]
+
+
+class GameHandler(VariableHandler):
+    """$(game) — current or last game/category for the channel."""
+
+    namespace = "game"
+
+    async def resolve(self, prop, args, context):
+        from core.models import Channel
+        from core.twitch import TWITCH_API_BASE
+        from core.twitch import twitch_request
+
+        try:
+            channel = await sync_to_async(Channel.objects.get)(
+                twitch_channel_id=context.broadcaster_id,
+                is_active=True,
+            )
+        except Channel.DoesNotExist:
+            return ""
+
+        response = await twitch_request(
+            channel,
+            "GET",
+            f"{TWITCH_API_BASE}/channels",
+            params={"broadcaster_id": context.broadcaster_id},
+        )
+        if response is None or response.status_code >= 400:
+            return ""
+
+        data = response.json()
+        if not data.get("data"):
+            return ""
+
+        return data["data"][0].get("game_name", "")
+
+    def describe(self):
+        return [
+            VariableDescriptor(
+                namespace="game",
+                property=None,
+                args_hint=None,
+                description="Current or last game/category for the channel.",
+                example="$(game)",
+            ),
+        ]
+
+
+def format_uptime(started_at: datetime) -> str:
+    """Format stream uptime as a compact human-readable string."""
+    now = datetime.now(UTC)
+    delta = now - started_at
+    total_seconds = int(delta.total_seconds())
+
+    if total_seconds < 60:
+        return "just started"
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes = remainder // 60
+
+    if hours == 0:
+        return f"{minutes}m"
+
+    days, hours = divmod(hours, 24)
+
+    if days == 0:
+        return f"{hours}h {minutes}m"
+
+    return f"{days}d {hours}h {minutes}m"
+
+
 class QueryHandler(VariableHandler):
     """$(query) — full raw argument string after the command name."""
 
@@ -391,6 +513,8 @@ def create_registry() -> VariableRegistry:
     registry.register(UsesHandler())
     registry.register(CountHandler())
     registry.register(RandomHandler())
+    registry.register(UptimeHandler())
+    registry.register(GameHandler())
     registry.register(QueryHandler())
     registry.register(IndexHandler())
     return registry

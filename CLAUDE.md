@@ -118,6 +118,8 @@ Variables use `$(namespace.property args)` syntax in command responses. Defined 
 | `$(count.label <name>)` | Display label of a named counter |
 | `$(random.range N-M)` | Random integer between N and M |
 | `$(random.pick a,b,c)` | Random choice from a comma-separated list |
+| `$(uptime)` | Stream uptime (e.g., `3h 42m`), or `offline` if not live. Uses `GET /helix/streams` |
+| `$(game)` | Current or last game/category for the channel. Uses `GET /helix/channels` |
 | `$(query)` | Full argument string after the command name |
 | `$(1)`, `$(2)`, ... | Positional arguments (1-based) |
 
@@ -132,7 +134,7 @@ If a command's response starts with `/me `, the bot sends it as a Twitch action 
 
 ### Twitch API Client (`core/twitch.py`)
 
-Shared utility for making authenticated Twitch Helix API calls with automatic token refresh. Used by skill handlers that need channel owner tokens (e.g., `FollowCheckHandler`).
+Shared utility for making authenticated Twitch Helix API calls with automatic token refresh. Used by skill handlers (e.g., `FollowCheckHandler`) and variable handlers (`UptimeHandler`, `GameHandler`) that need channel owner tokens.
 
 - `twitch_request(channel, method, url, **kwargs)` — Makes an authenticated request using the channel owner's token. On 401, automatically refreshes the token and retries once. Returns an `httpx.Response` on success, or `None` if both the request and refresh fail.
 - `refresh_channel_token(channel)` — Refreshes a channel owner's OAuth token via `POST https://id.twitch.tv/oauth2/token` with `grant_type=refresh_token`. Updates the channel's `owner_access_token`, `owner_refresh_token`, and `owner_token_expires_at` in the database. Returns `True` on success.
@@ -171,8 +173,8 @@ For importing commands from DeepBot, these map to our system:
 |---|---|---|
 | `@user@` | `$(user)` | Supported |
 | `@target@` | `$(target)` | Supported |
-| `@uptime@` | `$(uptime)` | Not yet implemented |
-| `@game@` | `$(game)` | Not yet implemented |
+| `@uptime@` | `$(uptime)` | ✅ Supported |
+| `@game@` | `$(game)` | ✅ Supported |
 | `@counter@`, `@getcounter@` | `$(count.get <name>)` | Supported (via Counter model) |
 | `@customapi@` | — | Skill (not yet implemented) |
 | `@readfile@` | — | Skill (not yet implemented) |
