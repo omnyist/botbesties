@@ -86,7 +86,7 @@ Handler signature: `handle(self, payload, args, skill, bot)` — the `bot` param
 
 | Skill | Handler | Description |
 |---|---|---|
-| `checkme` | `FollowCheckHandler` | Checks if the chatter follows the channel and shows how long they've been following. Uses channel owner's OAuth token to call Twitch Helix API (`/channels/followers`). Requires `moderator:read:followers` scope on the channel owner token. |
+| `checkme` | `FollowCheckHandler` | Checks if the chatter follows the channel and shows how long they've been following. Uses `twitch_request()` to call Twitch Helix API (`/channels/followers`) with automatic token refresh on 401. Requires `moderator:read:followers` scope on the channel owner token. |
 
 ## Message Processing Pipeline
 
@@ -129,6 +129,15 @@ If a command's response starts with `/me `, the bot sends it as a Twitch action 
 
 - The bot ignores its own messages to prevent command chaining.
 - `$(target)` strips leading `@` only. The self-message guard prevents injection of `!commands` or `/me` via target arguments.
+
+### Twitch API Client (`core/twitch.py`)
+
+Shared utility for making authenticated Twitch Helix API calls with automatic token refresh. Used by skill handlers that need channel owner tokens (e.g., `FollowCheckHandler`).
+
+- `twitch_request(channel, method, url, **kwargs)` — Makes an authenticated request using the channel owner's token. On 401, automatically refreshes the token and retries once. Returns an `httpx.Response` on success, or `None` if both the request and refresh fail.
+- `refresh_channel_token(channel)` — Refreshes a channel owner's OAuth token via `POST https://id.twitch.tv/oauth2/token` with `grant_type=refresh_token`. Updates the channel's `owner_access_token`, `owner_refresh_token`, and `owner_token_expires_at` in the database. Returns `True` on success.
+
+Token refresh is **reactive** (on 401), following Twitch's recommendation. Tokens can become invalid for reasons beyond expiry, so proactive checks on `expires_at` are not sufficient.
 
 ## Alias System
 

@@ -727,12 +727,11 @@ class TestFormatTimesince:
 # --- FollowCheckHandler tests ---
 
 
-def _mock_httpx_response(status_code=200, json_data=None):
-    """Create a mock httpx response."""
+def _mock_twitch_response(status_code=200, json_data=None):
+    """Create a mock httpx-like response for twitch_request."""
     response = MagicMock()
     response.status_code = status_code
     response.json.return_value = json_data or {}
-    response.raise_for_status = MagicMock()
     return response
 
 
@@ -752,7 +751,7 @@ class TestFollowCheckHandler:
             datetime.now(UTC) - timedelta(days=90)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        api_response = _mock_httpx_response(
+        api_response = _mock_twitch_response(
             json_data={
                 "total": 1,
                 "data": [
@@ -766,11 +765,6 @@ class TestFollowCheckHandler:
             }
         )
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = api_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
         bot = MagicMock()
         bot.bot_id = "00000"
 
@@ -783,7 +777,7 @@ class TestFollowCheckHandler:
             broadcaster=MockBroadcaster(id=99999),
         )
 
-        with patch("bot.skills.followcheck.httpx.AsyncClient", return_value=mock_client):
+        with patch("bot.skills.followcheck.twitch_request", new_callable=AsyncMock, return_value=api_response):
             await router.event_message(payload)
 
         payload.respond.assert_called_once()
@@ -802,14 +796,9 @@ class TestFollowCheckHandler:
             channel=channel, name="checkme", enabled=True
         )
 
-        api_response = _mock_httpx_response(
+        api_response = _mock_twitch_response(
             json_data={"total": 0, "data": []}
         )
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = api_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         bot = MagicMock()
         bot.bot_id = "00000"
@@ -823,13 +812,48 @@ class TestFollowCheckHandler:
             broadcaster=MockBroadcaster(id=99999),
         )
 
-        with patch("bot.skills.followcheck.httpx.AsyncClient", return_value=mock_client):
+        with patch("bot.skills.followcheck.twitch_request", new_callable=AsyncMock, return_value=api_response):
             await router.event_message(payload)
 
         payload.respond.assert_called_once()
         assert (
             payload.respond.call_args[0][0]
             == "@TestUser, you are not following this channel."
+        )
+
+    async def test_broadcaster_gets_broadcaster_message(self, channel):
+        channel.owner_access_token = "fake_token"
+        channel.save()
+
+        from core.models import Skill
+
+        Skill.objects.create(
+            channel=channel, name="checkme", enabled=True
+        )
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+
+        from bot.router import CommandRouter
+
+        router = CommandRouter(bot)
+
+        # Chatter ID matches broadcaster ID
+        payload = MockPayload(
+            text="!checkme",
+            chatter=MockChatter(
+                name="testchannel",
+                display_name="TestChannel",
+                id=99999,
+            ),
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        payload.respond.assert_called_once()
+        assert (
+            payload.respond.call_args[0][0]
+            == "@TestChannel, you are the broadcaster!"
         )
 
     async def test_no_owner_token(self, channel):
@@ -858,7 +882,9 @@ class TestFollowCheckHandler:
             == "@TestUser, follow check is not available right now."
         )
 
-    async def test_expired_token_returns_not_available(self, channel):
+    async def test_expired_token_refresh_fails_shows_not_available(
+        self, channel
+    ):
         channel.owner_access_token = "expired_token"
         channel.save()
 
@@ -867,13 +893,6 @@ class TestFollowCheckHandler:
         Skill.objects.create(
             channel=channel, name="checkme", enabled=True
         )
-
-        api_response = _mock_httpx_response(status_code=401)
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = api_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         bot = MagicMock()
         bot.bot_id = "00000"
@@ -887,13 +906,14 @@ class TestFollowCheckHandler:
             broadcaster=MockBroadcaster(id=99999),
         )
 
-        with patch("bot.skills.followcheck.httpx.AsyncClient", return_value=mock_client):
+        # twitch_request returns None when refresh also fails
+        with patch("bot.skills.followcheck.twitch_request", new_callable=AsyncMock, return_value=None):
             await router.event_message(payload)
 
         payload.respond.assert_called_once()
         assert (
             payload.respond.call_args[0][0]
-            == "@TestUser, you are not following this channel."
+            == "@TestUser, follow check is not available right now."
         )
 
     async def test_skill_not_enabled_skips(self, channel):
@@ -921,7 +941,7 @@ class TestFollowCheckHandler:
 
         payload.respond.assert_not_called()
 
-    async def test_api_sends_correct_params(self, channel):
+    async def test_api_called_with_correct_url_and_params(self, channel):
         channel.owner_access_token = "test_bearer_token"
         channel.save()
 
@@ -935,7 +955,7 @@ class TestFollowCheckHandler:
             "%Y-%m-%dT%H:%M:%SZ"
         )
 
-        api_response = _mock_httpx_response(
+        api_response = _mock_twitch_response(
             json_data={
                 "total": 1,
                 "data": [
@@ -949,11 +969,6 @@ class TestFollowCheckHandler:
             }
         )
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = api_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
         bot = MagicMock()
         bot.bot_id = "00000"
 
@@ -966,11 +981,14 @@ class TestFollowCheckHandler:
             broadcaster=MockBroadcaster(id=99999),
         )
 
-        with patch("bot.skills.followcheck.httpx.AsyncClient", return_value=mock_client):
+        mock_twitch_request = AsyncMock(return_value=api_response)
+        with patch("bot.skills.followcheck.twitch_request", mock_twitch_request):
             await router.event_message(payload)
 
-        mock_client.get.assert_called_once()
-        call_kwargs = mock_client.get.call_args
-        assert call_kwargs[1]["headers"]["Authorization"] == "Bearer test_bearer_token"
-        assert call_kwargs[1]["params"]["broadcaster_id"] == "99999"
-        assert call_kwargs[1]["params"]["user_id"] == "12345"
+        mock_twitch_request.assert_called_once()
+        call_args = mock_twitch_request.call_args
+        # First positional arg is the channel object
+        assert call_args[0][1] == "GET"
+        assert "channels/followers" in call_args[0][2]
+        assert call_args[1]["params"]["broadcaster_id"] == "99999"
+        assert call_args[1]["params"]["user_id"] == "12345"

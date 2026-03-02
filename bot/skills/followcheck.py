@@ -4,16 +4,14 @@ import logging
 from datetime import UTC
 from datetime import datetime
 
-import httpx
 from asgiref.sync import sync_to_async
-from django.conf import settings
 
 from bot.skills import SkillHandler
 from bot.skills import register_skill
+from core.twitch import TWITCH_API_BASE
+from core.twitch import twitch_request
 
 logger = logging.getLogger("bot")
-
-TWITCH_API_BASE = "https://api.twitch.tv/helix"
 
 
 class FollowCheckHandler(SkillHandler):
@@ -43,6 +41,13 @@ class FollowCheckHandler(SkillHandler):
             )
             return
 
+        # Broadcaster can't follow themselves.
+        if chatter_id == broadcaster_id:
+            await payload.respond(
+                f"@{chatter_name}, you are the broadcaster!"
+            )
+            return
+
         if not channel.owner_access_token:
             await payload.respond(
                 f"@{chatter_name}, follow check is not available right now."
@@ -50,10 +55,16 @@ class FollowCheckHandler(SkillHandler):
             return
 
         follow_data = await self._fetch_follow(
-            channel.owner_access_token,
+            channel,
             broadcaster_id,
             chatter_id,
         )
+
+        if follow_data is False:
+            await payload.respond(
+                f"@{chatter_name}, follow check is not available right now."
+            )
+            return
 
         if follow_data is None:
             await payload.respond(
@@ -73,50 +84,42 @@ class FollowCheckHandler(SkillHandler):
 
     async def _fetch_follow(
         self,
-        token: str,
+        channel,
         broadcaster_id: str,
         user_id: str,
-    ) -> dict | None:
+    ) -> dict | None | bool:
         """Fetch follow relationship from Twitch API.
 
-        Returns the follow data dict if the user follows, or None.
+        Returns:
+            dict — user follows (follow data)
+            None — user does not follow (confirmed by API)
+            False — could not check (API/token error)
         """
         url = f"{TWITCH_API_BASE}/channels/followers"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Client-Id": settings.TWITCH_CLIENT_ID,
-        }
         params = {
             "broadcaster_id": broadcaster_id,
             "user_id": user_id,
         }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    url, headers=headers, params=params
-                )
+        response = await twitch_request(
+            channel, "GET", url, params=params
+        )
+        if response is None:
+            return False
 
-            if response.status_code == 401:
-                logger.warning(
-                    "Channel owner token expired for broadcaster %s",
-                    broadcaster_id,
-                )
-                return None
-
-            response.raise_for_status()
-            data = response.json()
-
-            if data.get("data"):
-                return data["data"][0]
-            return None
-        except httpx.HTTPError:
-            logger.exception(
-                "Failed to fetch follow status for user %s in channel %s",
+        if response.status_code >= 400:
+            logger.warning(
+                "Followers API returned %s for user %s in channel %s",
+                response.status_code,
                 user_id,
                 broadcaster_id,
             )
-            return None
+            return False
+
+        data = response.json()
+        if data.get("data"):
+            return data["data"][0]
+        return None
 
 
 def format_timesince(followed_at: datetime) -> str:
