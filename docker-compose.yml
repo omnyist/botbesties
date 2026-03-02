@@ -51,7 +51,15 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - .:/app
+    networks:
+      - default
+      - synth
     command: uv run python manage.py runbot
+
+networks:
+  default:
+  synth:
+    external: true
 
 volumes:
   postgres_data:

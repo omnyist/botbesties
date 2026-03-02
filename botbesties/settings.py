@@ -113,6 +113,11 @@ CHANNEL_LAYERS = {
 TWITCH_CLIENT_ID = env("TWITCH_CLIENT_ID", default="")
 TWITCH_CLIENT_SECRET = env("TWITCH_CLIENT_SECRET", default="")
 
+# Synthfunc
+
+SYNTHFUNC_API_URL = env("SYNTHFUNC_API_URL", default="http://localhost:7176/api")
+SYNTHFUNC_API_KEY = env("SYNTHFUNC_API_KEY", default="")
+
 # Encryption
 
 FERNET_KEY = env("FERNET_KEY", default="")
