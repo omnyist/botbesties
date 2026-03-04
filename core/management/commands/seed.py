@@ -441,6 +441,7 @@ class Command(BaseCommand):
         """Seed skill records for all active channels."""
         skills_to_seed = [
             {"name": "followage"},
+            {"name": "spoons"},
         ]
 
         for channel in Channel.objects.filter(is_active=True):

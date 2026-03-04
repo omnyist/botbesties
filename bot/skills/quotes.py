@@ -34,9 +34,18 @@ def _format_quote(quote: dict) -> str:
     text = quote.get("text", "")
     quotee = quote.get("quotee", {})
     name = quotee.get("display_name", quotee.get("username", "???"))
-    year = quote.get("year", "")
-    year_str = f" [{year}]" if year else ""
-    return f'Quote #{number}: "{text}" — {name}{year_str}'
+    game = quote.get("game")
+    year = quote.get("year")
+
+    # Build suffix: [Game, Year], [Game], [Year], or nothing
+    parts = []
+    if game:
+        parts.append(game)
+    if year:
+        parts.append(str(year))
+    suffix = f" [{', '.join(parts)}]" if parts else ""
+
+    return f'Quote #{number}: "{text}" — {name}{suffix}'
 
 
 class QuoteHandler(SkillHandler):

@@ -130,17 +130,36 @@ async def get_quote_stats(username: str) -> dict | None:
 
 
 async def create_quote(
-    text: str, quotee_username: str, quoter_username: str
+    text: str,
+    quotee_username: str,
+    quoter_username: str,
+    game: str | None = None,
 ) -> dict | None:
     """Create a new quote."""
-    return await _post(
-        "/quotes/",
-        {
-            "text": text,
-            "quotee_username": quotee_username,
-            "quoter_username": quoter_username,
-        },
-    )
+    data = {
+        "text": text,
+        "quotee_username": quotee_username,
+        "quoter_username": quoter_username,
+    }
+    if game:
+        data["game"] = game
+    return await _post("/quotes/", data)
+
+
+# --- Wallets ---
+
+
+async def get_wallet(twitch_id: str, username: str | None = None) -> dict | None:
+    """Get a wallet by Twitch ID, with optional username for reconciliation."""
+    params = {"username": username} if username else None
+    return await _get(f"/wallets/{twitch_id}", params)
+
+
+async def get_wallet_leaderboard(
+    limit: int = 10, sort_by: str = "balance"
+) -> list | None:
+    """Get top wallets by balance or minutes."""
+    return await _get("/wallets/leaderboard", {"limit": limit, "sort_by": sort_by})
 
 
 # --- Campaigns ---

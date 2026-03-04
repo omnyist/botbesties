@@ -51,3 +51,4 @@ def discover_skills() -> None:
     from bot.skills import campaigns  # noqa: F401
     from bot.skills import followcheck  # noqa: F401
     from bot.skills import quotes  # noqa: F401
+    from bot.skills import spoons  # noqa: F401
