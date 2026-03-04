@@ -1,8 +1,8 @@
-"""!spoons — Check spoon (currency) balance.
+"""!wallet — Check currency balance.
 
 Usage:
-    !spoons         — Check your own balance
-    !spoons @kefka  — Check someone else's balance
+    !wallet         — Check your own balance
+    !wallet @kefka  — Check someone else's balance
 """
 
 from __future__ import annotations
@@ -17,10 +17,10 @@ from core.synthfunc import get_wallet
 logger = logging.getLogger("bot")
 
 
-class SpoonsHandler(SkillHandler):
-    """!spoons — Check currency balance via Synthfunc wallets."""
+class WalletHandler(SkillHandler):
+    """!wallet — Check currency balance via Synthfunc wallets."""
 
-    name = "spoons"
+    name = "wallet"
 
     async def handle(self, payload, args, skill, bot):
         chatter = payload.chatter
@@ -94,4 +94,4 @@ class SpoonsHandler(SkillHandler):
         )
 
 
-register_skill(SpoonsHandler())
+register_skill(WalletHandler())
