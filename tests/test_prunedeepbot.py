@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from core.management.commands.prunedeepbot import KNOWN_BOTS
 from core.management.commands.prunedeepbot import format_user
 from core.management.commands.prunedeepbot import parse_iso_datetime
 
@@ -114,8 +115,9 @@ class TestPruneDeepbotCommand:
 
     @pytest.mark.django_db
     def test_elevated_users_always_kept(self):
-        from django.core.management import call_command
         from io import StringIO
+
+        from django.core.management import call_command
 
         data = [
             {
@@ -141,7 +143,6 @@ class TestPruneDeepbotCommand:
                 call_command(
                     "prunedeepbot", f.name,
                     "--output", str(output_path),
-                    "--min-minutes", "60",
                     stdout=out,
                 )
 
@@ -150,9 +151,114 @@ class TestPruneDeepbotCommand:
                 assert result[0]["username"] == "mod_user"
 
     @pytest.mark.django_db
-    def test_corrupted_records_separated(self):
-        from django.core.management import call_command
+    def test_points_filter(self):
         from io import StringIO
+
+        from django.core.management import call_command
+
+        data = [
+            {
+                "username": "rich_user",
+                "displayName": "rich_user",
+                "points": 500.0,
+                "minutes": 100,
+                "firstSeen": "2024-01-01T00:00:00",
+                "lastSeen": "2025-12-01T00:00:00",
+                "accessLevel": 10,
+            },
+            {
+                "username": "poor_user",
+                "displayName": "poor_user",
+                "points": 5.0,
+                "minutes": 1000,
+                "firstSeen": "2024-01-01T00:00:00",
+                "lastSeen": "2025-12-01T00:00:00",
+                "accessLevel": 10,
+            },
+        ]
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(data, f)
+            f.flush()
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / "pruned.json"
+                excluded_path = Path(tmpdir) / "excluded_users.json"
+                out = StringIO()
+                call_command(
+                    "prunedeepbot", f.name,
+                    "--output", str(output_path),
+                    "--min-points", "100",
+                    stdout=out,
+                )
+
+                pruned = json.loads(output_path.read_text())
+                assert len(pruned) == 1
+                assert pruned[0]["username"] == "rich_user"
+
+                excluded = json.loads(excluded_path.read_text())
+                assert len(excluded) == 1
+                assert excluded[0]["username"] == "poor_user"
+
+    @pytest.mark.django_db
+    def test_known_bots_excluded(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        data = [
+            {
+                "username": "moobot",
+                "displayName": "Moobot",
+                "points": 99999.0,
+                "minutes": 999999,
+                "firstSeen": "2020-01-01T00:00:00",
+                "lastSeen": "2026-01-01T00:00:00",
+                "accessLevel": 10,
+            },
+            {
+                "username": "real_user",
+                "displayName": "real_user",
+                "points": 200.0,
+                "minutes": 500,
+                "firstSeen": "2024-01-01T00:00:00",
+                "lastSeen": "2025-12-01T00:00:00",
+                "accessLevel": 10,
+            },
+        ]
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as f:
+            json.dump(data, f)
+            f.flush()
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                output_path = Path(tmpdir) / "pruned.json"
+                out = StringIO()
+                call_command(
+                    "prunedeepbot", f.name,
+                    "--output", str(output_path),
+                    stdout=out,
+                )
+
+                pruned = json.loads(output_path.read_text())
+                usernames = [u["username"] for u in pruned]
+                assert "moobot" not in usernames
+                assert "real_user" in usernames
+
+    def test_known_bots_list_has_common_bots(self):
+        assert "moobot" in KNOWN_BOTS
+        assert "nightbot" in KNOWN_BOTS
+        assert "streamelements" in KNOWN_BOTS
+
+    @pytest.mark.django_db
+    def test_corrupted_records_separated(self):
+        from io import StringIO
+
+        from django.core.management import call_command
 
         data = [
             {

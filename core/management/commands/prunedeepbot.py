@@ -2,12 +2,33 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from datetime import timedelta
 from datetime import timezone
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
+
+# Known Twitch service bots / viewbots that inflate stats.
+KNOWN_BOTS = {
+    "moobot",
+    "nightbot",
+    "streamelements",
+    "streamlabs",
+    "fossabot",
+    "wizebot",
+    "deepbot",
+    "phantombot",
+    "botisimo",
+    "soundalerts",
+    "commanderroot",
+    "anotherttvviewer",
+    "lurxx",
+    "electricallongboard",
+    "virgoproz",
+    "drapsnatt",
+    "streamholics",
+    "stay_hydrated_bot",
+}
 
 
 def parse_iso_datetime(value: str) -> datetime | None:
@@ -42,16 +63,10 @@ class Command(BaseCommand):
             "json_file", type=str, help="Path to the DeepBot users.json file."
         )
         parser.add_argument(
-            "--min-minutes",
-            type=int,
-            default=60,
-            help="Minimum minutes watched for non-elevated users (default: 60).",
-        )
-        parser.add_argument(
-            "--max-inactive-days",
-            type=int,
-            default=730,
-            help="Max days since last seen for non-elevated users (default: 730).",
+            "--min-points",
+            type=float,
+            default=100,
+            help="Minimum points for non-elevated users (default: 100).",
         )
         parser.add_argument(
             "--output",
@@ -67,8 +82,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         json_path = Path(options["json_file"])
-        min_minutes = options["min_minutes"]
-        max_inactive_days = options["max_inactive_days"]
+        min_points = options["min_points"]
         output_path = Path(options["output"])
         dry_run = options["dry_run"]
 
@@ -134,49 +148,61 @@ class Command(BaseCommand):
         if dedup_count:
             self.stdout.write(f"  Deduplicated: {dedup_count}")
 
-        # Step 3: Separate elevated and non-elevated
-        now = datetime.now(tz=timezone.utc)
-        cutoff = now - timedelta(days=max_inactive_days)
-
+        # Step 3: Filter
         elevated = []
         passed_filter = []
-        filtered_out = 0
+        excluded = []
+        bots_removed = []
 
         for record in seen.values():
+            username = record["username"]
             access_level = record.get("accessLevel", 10)
 
+            # Strip known bots regardless of level
+            if username in KNOWN_BOTS:
+                bots_removed.append(record)
+                continue
+
+            # Always keep elevated users
             if access_level < 10:
                 elevated.append(record)
                 continue
 
-            minutes = record.get("minutes", 0)
-            if minutes < min_minutes:
-                filtered_out += 1
-                continue
-
-            last_seen = parse_iso_datetime(record.get("lastSeen", ""))
-            if last_seen is None or last_seen < cutoff:
-                filtered_out += 1
-                continue
-
-            passed_filter.append(record)
+            # Filter non-elevated by points
+            points = record.get("points", 0.0)
+            if points >= min_points:
+                passed_filter.append(record)
+            else:
+                excluded.append(record)
 
         kept = elevated + passed_filter
 
-        self.stdout.write(f"  Elevated (always kept): {len(elevated)}")
-        self.stdout.write(f"  Passed filter: {len(passed_filter)}")
-        self.stdout.write(f"  Filtered out: {filtered_out}")
+        self.stdout.write(f"\n  Elevated (always kept): {len(elevated)}")
+        self.stdout.write(f"  Passed filter (>={min_points} pts): {len(passed_filter)}")
+        self.stdout.write(f"  Known bots removed: {len(bots_removed)}")
+        self.stdout.write(f"  Excluded: {len(excluded):,}")
         self.stdout.write(
             self.style.SUCCESS(f"  Total kept: {len(kept):,}")
         )
 
         if not dry_run:
-            # Write pruned users
+            # Write pruned users (to import)
             output = [format_user(r) for r in kept]
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(output, f, indent=2, ensure_ascii=False)
             self.stdout.write(
-                self.style.SUCCESS(f"\n  Wrote {len(output):,} users to {output_path}")
+                self.style.SUCCESS(
+                    f"\n  Wrote {len(output):,} users to {output_path}"
+                )
+            )
+
+            # Write excluded users (lookup for one-off imports)
+            excluded_path = output_path.parent / "excluded_users.json"
+            excluded_output = [format_user(r) for r in excluded]
+            with open(excluded_path, "w", encoding="utf-8") as f:
+                json.dump(excluded_output, f, indent=2, ensure_ascii=False)
+            self.stdout.write(
+                f"  Wrote {len(excluded_output):,} excluded users to {excluded_path}"
             )
 
             # Write corrupted records for manual review
