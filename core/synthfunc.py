@@ -25,12 +25,17 @@ def _headers() -> dict[str, str]:
     return {"X-API-Key": settings.SYNTHFUNC_API_KEY}
 
 
-async def _get(path: str, params: dict[str, Any] | None = None) -> dict | list | None:
+async def _get(
+    path: str,
+    params: dict[str, Any] | None = None,
+    tenant_slug: str | None = None,
+) -> dict | list | None:
     """Make a GET request to Synthfunc."""
+    url_path = f"/{tenant_slug}{path}" if tenant_slug else path
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{settings.SYNTHFUNC_API_URL}{path}",
+                f"{settings.SYNTHFUNC_API_URL}{url_path}",
                 headers=_headers(),
                 params=params,
                 timeout=10.0,
@@ -42,7 +47,7 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict | list |
         if response.status_code != 200:
             logger.error(
                 "Synthfunc GET %s failed: %s %s",
-                path,
+                url_path,
                 response.status_code,
                 response.text,
             )
@@ -51,16 +56,19 @@ async def _get(path: str, params: dict[str, Any] | None = None) -> dict | list |
         return response.json()
 
     except httpx.HTTPError:
-        logger.exception("HTTP error during Synthfunc GET %s", path)
+        logger.exception("HTTP error during Synthfunc GET %s", url_path)
         return None
 
 
-async def _post(path: str, data: dict[str, Any]) -> dict | None:
+async def _post(
+    path: str, data: dict[str, Any], tenant_slug: str | None = None
+) -> dict | None:
     """Make a POST request to Synthfunc."""
+    url_path = f"/{tenant_slug}{path}" if tenant_slug else path
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{settings.SYNTHFUNC_API_URL}{path}",
+                f"{settings.SYNTHFUNC_API_URL}{url_path}",
                 headers=_headers(),
                 json=data,
                 timeout=10.0,
@@ -69,7 +77,7 @@ async def _post(path: str, data: dict[str, Any]) -> dict | None:
         if response.status_code not in (200, 201):
             logger.error(
                 "Synthfunc POST %s failed: %s %s",
-                path,
+                url_path,
                 response.status_code,
                 response.text,
             )
@@ -78,61 +86,66 @@ async def _post(path: str, data: dict[str, Any]) -> dict | None:
         return response.json()
 
     except httpx.HTTPError:
-        logger.exception("HTTP error during Synthfunc POST %s", path)
+        logger.exception("HTTP error during Synthfunc POST %s", url_path)
         return None
 
 
 # --- Quotes ---
 
 
-async def get_random_quote() -> dict | None:
+async def get_random_quote(tenant_slug: str) -> dict | None:
     """Get a single random quote."""
-    result = await _get("/quotes/random", {"limit": 1})
+    result = await _get("/quotes/random", {"limit": 1}, tenant_slug=tenant_slug)
     if result and isinstance(result, list) and len(result) > 0:
         return result[0]
     return None
 
 
-async def get_quote_by_number(number: int) -> dict | None:
+async def get_quote_by_number(number: int, tenant_slug: str) -> dict | None:
     """Get a specific quote by its number."""
-    return await _get(f"/quotes/{number}")
+    return await _get(f"/quotes/{number}", tenant_slug=tenant_slug)
 
 
 async def search_quotes(
-    query: str, limit: int = 5, random: bool = False
+    query: str, tenant_slug: str, limit: int = 5, random: bool = False
 ) -> dict | None:
     """Search quotes by text. Returns {quotes: [...], total_matches: int}."""
     return await _get(
-        "/quotes/search", {"q": query, "limit": limit, "random": random}
+        "/quotes/search",
+        {"q": query, "limit": limit, "random": random},
+        tenant_slug=tenant_slug,
     )
 
 
 async def get_quotes_by_user(
-    username: str, limit: int = 5, random: bool = False
+    username: str, tenant_slug: str, limit: int = 5, random: bool = False
 ) -> dict | None:
     """Get quotes by a specific user. Returns {quotes: [...], total_matches: int}."""
     return await _get(
-        f"/quotes/by-user/{username}", {"limit": limit, "random": random}
+        f"/quotes/by-user/{username}",
+        {"limit": limit, "random": random},
+        tenant_slug=tenant_slug,
     )
 
 
-async def get_latest_quote() -> dict | None:
+async def get_latest_quote(tenant_slug: str) -> dict | None:
     """Get the most recent quote."""
-    result = await _get("/quotes/latest", {"limit": 1})
+    result = await _get("/quotes/latest", {"limit": 1}, tenant_slug=tenant_slug)
     if result and isinstance(result, list) and len(result) > 0:
         return result[0]
     return None
 
 
-async def get_quote_stats(username: str) -> dict | None:
+async def get_quote_stats(username: str, tenant_slug: str) -> dict | None:
     """Get quote statistics for a user."""
-    return await _get(f"/quotes/stats/{username}")
+    return await _get(f"/quotes/stats/{username}", tenant_slug=tenant_slug)
 
 
 async def create_quote(
     text: str,
     quotee_username: str,
     quoter_username: str,
+    tenant_slug: str,
     game: str | None = None,
 ) -> dict | None:
     """Create a new quote."""
@@ -143,41 +156,53 @@ async def create_quote(
     }
     if game:
         data["game"] = game
-    return await _post("/quotes/", data)
+    return await _post("/quotes/", data, tenant_slug=tenant_slug)
 
 
 # --- Wallets ---
 
 
-async def get_wallet(twitch_id: str, username: str | None = None) -> dict | None:
+async def get_wallet(
+    twitch_id: str, tenant_slug: str, username: str | None = None
+) -> dict | None:
     """Get a wallet by Twitch ID, with optional username for reconciliation."""
     params = {"username": username} if username else None
-    return await _get(f"/wallets/{twitch_id}", params)
+    return await _get(f"/wallets/{twitch_id}", params, tenant_slug=tenant_slug)
 
 
 async def get_wallet_leaderboard(
-    limit: int = 10, sort_by: str = "balance"
+    tenant_slug: str, limit: int = 10, sort_by: str = "balance"
 ) -> list | None:
     """Get top wallets by balance or minutes."""
-    return await _get("/wallets/leaderboard", {"limit": limit, "sort_by": sort_by})
+    return await _get(
+        "/wallets/leaderboard",
+        {"limit": limit, "sort_by": sort_by},
+        tenant_slug=tenant_slug,
+    )
 
 
 # --- Campaigns ---
 
 
-async def get_active_campaign() -> dict | None:
+async def get_active_campaign(tenant_slug: str) -> dict | None:
     """Get the currently active campaign with metrics and milestones."""
-    return await _get("/campaigns/active")
+    return await _get("/campaigns/active", tenant_slug=tenant_slug)
 
 
-async def get_campaign_metrics(campaign_id: str) -> dict | None:
+async def get_campaign_metrics(campaign_id: str, tenant_slug: str) -> dict | None:
     """Get metrics for a specific campaign."""
-    return await _get(f"/campaigns/{campaign_id}/metrics")
+    return await _get(
+        f"/campaigns/{campaign_id}/metrics", tenant_slug=tenant_slug
+    )
 
 
-async def get_gift_leaderboard(limit: int = 10) -> list | None:
+async def get_gift_leaderboard(tenant_slug: str, limit: int = 10) -> list | None:
     """Get the gift leaderboard for the active campaign."""
-    return await _get("/campaigns/active/gifts/leaderboard", {"limit": limit})
+    return await _get(
+        "/campaigns/active/gifts/leaderboard",
+        {"limit": limit},
+        tenant_slug=tenant_slug,
+    )
 
 
 # --- Members ---
@@ -205,9 +230,9 @@ async def create_member(
 # --- Streams ---
 
 
-async def get_stream_status() -> dict | None:
+async def get_stream_status(tenant_slug: str) -> dict | None:
     """Get current broadcaster stream status."""
-    return await _get("/streams/status/")
+    return await _get("/streams/status/", tenant_slug=tenant_slug)
 
 
 # --- Tokens ---

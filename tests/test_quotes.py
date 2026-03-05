@@ -24,7 +24,9 @@ def bot():
 
 @pytest.fixture
 def skill():
-    return MagicMock()
+    skill = MagicMock()
+    skill.channel.twitch_channel_name = "testchannel"
+    return skill
 
 
 class TestQuoteAdd:
@@ -35,7 +37,9 @@ class TestQuoteAdd:
         payload = MockPayload(text='!quote add "Something funny" ~ @spoonee')
         await handler.handle(payload, 'add "Something funny" ~ @spoonee', skill, bot)
 
-        mock_create.assert_called_once_with("Something funny", "spoonee", "TestUser")
+        mock_create.assert_called_once_with(
+            "Something funny", "spoonee", "TestUser", "testchannel"
+        )
         msg = payload.broadcaster.send_message.call_args.kwargs["message"]
         assert "added quote #99" in msg
         assert "Blame yourself or God." in msg
@@ -72,7 +76,7 @@ class TestQuoteAdd:
         )
 
         mock_create.assert_called_once_with(
-            "I can't believe it's not butter!", "bryan", "TestUser"
+            "I can't believe it's not butter!", "bryan", "TestUser", "testchannel"
         )
 
 

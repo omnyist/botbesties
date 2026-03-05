@@ -28,7 +28,8 @@ class CampaignHandler(SkillHandler):
     name = "campaign"
 
     async def handle(self, payload, args, skill, bot):
-        campaign = await get_active_campaign()
+        tenant_slug = skill.channel.twitch_channel_name
+        campaign = await get_active_campaign(tenant_slug)
         if not campaign:
             await send_reply(
                 payload,
@@ -61,7 +62,8 @@ class TimerHandler(SkillHandler):
     name = "timer"
 
     async def handle(self, payload, args, skill, bot):
-        campaign = await get_active_campaign()
+        tenant_slug = skill.channel.twitch_channel_name
+        campaign = await get_active_campaign(tenant_slug)
         if not campaign:
             await send_reply(
                 payload,
@@ -114,7 +116,8 @@ class MilestonesHandler(SkillHandler):
     name = "milestones"
 
     async def handle(self, payload, args, skill, bot):
-        campaign = await get_active_campaign()
+        tenant_slug = skill.channel.twitch_channel_name
+        campaign = await get_active_campaign(tenant_slug)
         if not campaign:
             await send_reply(
                 payload,
@@ -148,7 +151,8 @@ class GiftsHandler(SkillHandler):
     name = "gifts"
 
     async def handle(self, payload, args, skill, bot):
-        leaderboard = await get_gift_leaderboard(limit=5)
+        tenant_slug = skill.channel.twitch_channel_name
+        leaderboard = await get_gift_leaderboard(tenant_slug, limit=5)
         if not leaderboard:
             await send_reply(
                 payload,

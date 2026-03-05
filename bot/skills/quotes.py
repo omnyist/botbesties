@@ -59,12 +59,13 @@ class QuoteHandler(SkillHandler):
     name = "quote"
 
     async def handle(self, payload, args, skill, bot):
+        tenant_slug = skill.channel.twitch_channel_name
         chatter_name = (
             payload.chatter.display_name if payload.chatter else "someone"
         )
 
         if not args:
-            await self._random(payload, bot, chatter_name)
+            await self._random(payload, bot, chatter_name, tenant_slug)
             return
 
         parts = args.split(maxsplit=1)
@@ -72,22 +73,24 @@ class QuoteHandler(SkillHandler):
         sub_args = parts[1] if len(parts) > 1 else ""
 
         if subcommand.isdigit():
-            await self._by_number(payload, bot, chatter_name, int(subcommand))
+            await self._by_number(
+                payload, bot, chatter_name, int(subcommand), tenant_slug
+            )
         elif subcommand == "search":
-            await self._search(payload, bot, chatter_name, sub_args)
+            await self._search(payload, bot, chatter_name, sub_args, tenant_slug)
         elif subcommand == "user":
-            await self._by_user(payload, bot, chatter_name, sub_args)
+            await self._by_user(payload, bot, chatter_name, sub_args, tenant_slug)
         elif subcommand == "add":
-            await self._add(payload, bot, chatter_name, sub_args)
+            await self._add(payload, bot, chatter_name, sub_args, tenant_slug)
         elif subcommand == "latest":
-            await self._latest(payload, bot, chatter_name)
+            await self._latest(payload, bot, chatter_name, tenant_slug)
         elif subcommand == "stats":
-            await self._stats(payload, bot, chatter_name, sub_args)
+            await self._stats(payload, bot, chatter_name, sub_args, tenant_slug)
         else:
-            await self._random(payload, bot, chatter_name)
+            await self._random(payload, bot, chatter_name, tenant_slug)
 
-    async def _random(self, payload, bot, chatter_name):
-        quote = await get_random_quote()
+    async def _random(self, payload, bot, chatter_name, tenant_slug):
+        quote = await get_random_quote(tenant_slug)
         if not quote:
             await send_reply(
                 payload, "No quotes found.", bot_id=bot.bot_id
@@ -99,8 +102,8 @@ class QuoteHandler(SkillHandler):
             bot_id=bot.bot_id,
         )
 
-    async def _by_number(self, payload, bot, chatter_name, number):
-        quote = await get_quote_by_number(number)
+    async def _by_number(self, payload, bot, chatter_name, number, tenant_slug):
+        quote = await get_quote_by_number(number, tenant_slug)
         if not quote:
             await send_reply(
                 payload,
@@ -114,7 +117,7 @@ class QuoteHandler(SkillHandler):
             bot_id=bot.bot_id,
         )
 
-    async def _search(self, payload, bot, chatter_name, query):
+    async def _search(self, payload, bot, chatter_name, query, tenant_slug):
         if not query:
             await send_reply(
                 payload,
@@ -123,7 +126,7 @@ class QuoteHandler(SkillHandler):
             )
             return
 
-        result = await search_quotes(query, limit=1, random=True)
+        result = await search_quotes(query, tenant_slug, limit=1, random=True)
         if not result or not result.get("quotes"):
             await send_reply(
                 payload,
@@ -148,7 +151,7 @@ class QuoteHandler(SkillHandler):
                 bot_id=bot.bot_id,
             )
 
-    async def _by_user(self, payload, bot, chatter_name, username):
+    async def _by_user(self, payload, bot, chatter_name, username, tenant_slug):
         if not username:
             await send_reply(
                 payload,
@@ -158,7 +161,9 @@ class QuoteHandler(SkillHandler):
             return
 
         username = username.lstrip("@")
-        result = await get_quotes_by_user(username, limit=1, random=True)
+        result = await get_quotes_by_user(
+            username, tenant_slug, limit=1, random=True
+        )
         if not result or not result.get("quotes"):
             await send_reply(
                 payload,
@@ -186,7 +191,7 @@ class QuoteHandler(SkillHandler):
     # Matches: "quote text here" ~ @username
     ADD_PATTERN = re.compile(r'"([^"]*?)"\s*~\s*@([A-Za-z0-9_]+)')
 
-    async def _add(self, payload, bot, chatter_name, args_str):
+    async def _add(self, payload, bot, chatter_name, args_str, tenant_slug):
         if not args_str:
             await send_reply(
                 payload,
@@ -208,7 +213,7 @@ class QuoteHandler(SkillHandler):
         text = match.group(1)
         quotee = match.group(2)
 
-        quote = await create_quote(text, quotee, chatter_name)
+        quote = await create_quote(text, quotee, chatter_name, tenant_slug)
         if not quote:
             await send_reply(
                 payload,
@@ -225,8 +230,8 @@ class QuoteHandler(SkillHandler):
             bot_id=bot.bot_id,
         )
 
-    async def _latest(self, payload, bot, chatter_name):
-        quote = await get_latest_quote()
+    async def _latest(self, payload, bot, chatter_name, tenant_slug):
+        quote = await get_latest_quote(tenant_slug)
         if not quote:
             await send_reply(
                 payload, "No quotes found.", bot_id=bot.bot_id
@@ -238,12 +243,12 @@ class QuoteHandler(SkillHandler):
             bot_id=bot.bot_id,
         )
 
-    async def _stats(self, payload, bot, chatter_name, username):
+    async def _stats(self, payload, bot, chatter_name, username, tenant_slug):
         if not username:
             username = chatter_name
 
         username = username.lstrip("@")
-        stats = await get_quote_stats(username)
+        stats = await get_quote_stats(username, tenant_slug)
         if not stats or stats.get("total_quotes", 0) == 0:
             await send_reply(
                 payload,

@@ -23,6 +23,7 @@ class WalletHandler(SkillHandler):
     name = "wallet"
 
     async def handle(self, payload, args, skill, bot):
+        tenant_slug = skill.channel.twitch_channel_name
         chatter = payload.chatter
         chatter_name = chatter.display_name if chatter else "someone"
 
@@ -65,7 +66,7 @@ class WalletHandler(SkillHandler):
                 )
                 return
 
-        wallet = await get_wallet(twitch_id, username=username)
+        wallet = await get_wallet(twitch_id, tenant_slug, username=username)
         if not wallet:
             await send_reply(
                 payload,
