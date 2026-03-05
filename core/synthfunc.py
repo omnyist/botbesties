@@ -176,6 +176,19 @@ async def accrue_wallets(
     )
 
 
+async def transact_wallets(
+    tenant_slug: str,
+    entries: list[dict],
+    reason: str = "",
+) -> dict | None:
+    """Process a batch of debits and credits against wallets."""
+    return await _post(
+        "/wallets/transact",
+        {"entries": entries, "reason": reason},
+        tenant_slug=tenant_slug,
+    )
+
+
 async def get_wallet(
     twitch_id: str, tenant_slug: str, username: str | None = None
 ) -> dict | None:

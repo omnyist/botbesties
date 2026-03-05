@@ -284,6 +284,7 @@ class Command(BaseCommand):
             {"name": "followcheck", "target": "followage"},
             {"name": "checkme", "target": "followage"},
             {"name": "spoons", "target": "wallet"},
+            {"name": "heist", "target": "dungeon"},
         ]
 
         for alias_data in spoonee_aliases:
@@ -467,6 +468,23 @@ class Command(BaseCommand):
                     "timeout_duration": 600,
                     "timeout_delay": 3,
                     "cooldown": 300,
+                },
+            },
+            {
+                "name": "dungeon",
+                "config": {
+                    "entry_duration": 120,
+                    "cooldown": 900,
+                    "min_wager": 10,
+                    "max_wager": 10000,
+                    "currency_name": "spoons",
+                    "levels": [
+                        {"name": "Cactuar Village", "min_players": 1, "survival_chance": 70, "multiplier": 1.5},
+                        {"name": "Tonberry Cove", "min_players": 3, "survival_chance": 60, "multiplier": 1.75},
+                        {"name": "Ultros", "min_players": 6, "survival_chance": 50, "multiplier": 2.0},
+                        {"name": "Tiamat", "min_players": 12, "survival_chance": 40, "multiplier": 2.25},
+                        {"name": "Bahamut", "min_players": 18, "survival_chance": 30, "multiplier": 2.5},
+                    ],
                 },
             },
         ]
