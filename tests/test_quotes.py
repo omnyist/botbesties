@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -34,11 +35,13 @@ class TestQuoteAdd:
     @patch("bot.skills.quotes.create_quote")
     async def test_add_valid_format(self, mock_create, handler, bot, skill):
         mock_create.return_value = {"number": 99}
+        handler._get_current_game = AsyncMock(return_value="Final Fantasy IX")
         payload = MockPayload(text='!quote add "Something funny" ~ @spoonee')
         await handler.handle(payload, 'add "Something funny" ~ @spoonee', skill, bot)
 
         mock_create.assert_called_once_with(
-            "Something funny", "spoonee", "TestUser", "testchannel"
+            "Something funny", "spoonee", "TestUser", "testchannel",
+            game="Final Fantasy IX",
         )
         msg = payload.broadcaster.send_message.call_args.kwargs["message"]
         assert "added quote #99" in msg
@@ -65,6 +68,7 @@ class TestQuoteAdd:
     @patch("bot.skills.quotes.create_quote")
     async def test_add_preserves_quote_text(self, mock_create, handler, bot, skill):
         mock_create.return_value = {"number": 100}
+        handler._get_current_game = AsyncMock(return_value=None)
         payload = MockPayload(
             text='!quote add "I can\'t believe it\'s not butter!" ~ @bryan'
         )
@@ -76,7 +80,8 @@ class TestQuoteAdd:
         )
 
         mock_create.assert_called_once_with(
-            "I can't believe it's not butter!", "bryan", "TestUser", "testchannel"
+            "I can't believe it's not butter!", "bryan", "TestUser", "testchannel",
+            game=None,
         )
 
 

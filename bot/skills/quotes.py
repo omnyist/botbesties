@@ -18,6 +18,8 @@ import re
 from bot.router import send_reply
 from bot.skills import SkillHandler
 from bot.skills import register_skill
+from asgiref.sync import sync_to_async
+
 from core.synthfunc import create_quote
 from core.synthfunc import get_latest_quote
 from core.synthfunc import get_quote_by_number
@@ -213,7 +215,10 @@ class QuoteHandler(SkillHandler):
         text = match.group(1)
         quotee = match.group(2)
 
-        quote = await create_quote(text, quotee, chatter_name, tenant_slug)
+        game = await self._get_current_game(payload)
+        quote = await create_quote(
+            text, quotee, chatter_name, tenant_slug, game=game
+        )
         if not quote:
             await send_reply(
                 payload,
@@ -229,6 +234,36 @@ class QuoteHandler(SkillHandler):
             "Blame yourself or God.",
             bot_id=bot.bot_id,
         )
+
+    async def _get_current_game(self, payload) -> str | None:
+        """Fetch the current game/category from Twitch Helix."""
+        from core.models import Channel
+        from core.twitch import TWITCH_API_BASE
+        from core.twitch import twitch_request
+
+        broadcaster_id = str(payload.broadcaster.id)
+        try:
+            channel = await sync_to_async(Channel.objects.get)(
+                twitch_channel_id=broadcaster_id,
+                is_active=True,
+            )
+        except Channel.DoesNotExist:
+            return None
+
+        response = await twitch_request(
+            channel,
+            "GET",
+            f"{TWITCH_API_BASE}/channels",
+            params={"broadcaster_id": broadcaster_id},
+        )
+        if response is None or response.status_code >= 400:
+            return None
+
+        data = response.json()
+        if not data.get("data"):
+            return None
+
+        return data["data"][0].get("game_name") or None
 
     async def _latest(self, payload, bot, chatter_name, tenant_slug):
         quote = await get_latest_quote(tenant_slug)
