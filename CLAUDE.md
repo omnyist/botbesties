@@ -93,6 +93,7 @@ Handler signature: `handle(self, payload, args, skill, bot)` — the `bot` param
 | `dungeon` | `DungeonHandler` | Multiplayer dungeon minigame with currency wagering via Synthfunc `POST /transact`. Entry phase (120s default) → level selection by player count → survival rolls → payout to winners. In-memory game state (`_games` dict keyed by broadcaster_id). Global cooldown between runs. Spoonee-only (aliased as `!heist`). |
 | `cute` | `CuteHandler` | Compliment someone. If target matches `config["bot_name"]` (default "elsydeon"), responds with `config["bot_response"]`. Otherwise uses `config["response"]` template with `$(target)` replacement. Avalonstar-only (Elsydeon channel). |
 | `punt` | `PuntHandler` | 1-second self-timeout for disrespecting lalafells. Issues `POST /moderation/bans` with `duration: 1` via `twitch_request()`. Mods and broadcasters are immune (get a "too kawaii" message). Config: `immune`, `success`, `failure` message templates. Avalonstar-only. |
+| `ads` | `AdsHandler` | Ad rotation control. `!ads` shows status, `!ads on`/`off` enables/disables (mod/broadcaster only). Calls Synthfunc REST API. Success messages come from `AdAnnounce` component via Redis events. |
 | `campaign` | `CampaignHandler` | Show active campaign info (subs, resubs, milestones unlocked). Avalonstar-only. |
 | `timer` | `TimerHandler` | Show subathon timer status (remaining time, running/paused). Avalonstar-only. |
 | `milestones` | `MilestonesHandler` | Show milestone progress with `[+]`/`[-]` icons. Avalonstar-only. |
@@ -139,6 +140,15 @@ The `CommandRouter` (`bot/router.py`) is a TwitchIO Component with a single `eve
    - `counter`: auto-increment named counter, use `command.response`
    - Common pipeline: increment use_count → build VariableContext → process variables → handle `/me` → respond
 6. **Skill handler fallback** — Look up handler in `SKILL_REGISTRY`, query `Skill` model, call `handler.handle()`
+
+## Background Components
+
+TwitchIO Components that run background tasks alongside the message pipeline.
+
+| Component | File | Description |
+|---|---|---|
+| `CurrencyAccrual` | `bot/components/accrual.py` | Ticks every 5 min while stream is live. Posts to Synthfunc `POST /wallets/accrue`. |
+| `AdAnnounce` | `bot/components/ads.py` | Subscribes to Synthfunc Redis pub/sub (`events:{slug}:ads`). Announces ad warnings, running, ended, enabled, disabled events in chat. Warning intervals configurable per-channel via skill config (`warning_intervals`, default `[60, 5]`). Messages customizable via `config["messages"]`. Uses `create_partialuser()` to send messages without a chat payload. |
 
 ## Variable System
 
@@ -297,6 +307,9 @@ The `importmoobot` command reads a Moobot export file (JSON with UTF-8 BOM) and 
 | `!conch [question]` | Everyone | Magic Conch Shell (random_list command) |
 | `!getyeflask` | Everyone | Random chance game (lottery command) |
 | `!checkme` | Everyone | Check follow status and duration (skill) |
+| `!ads` | Everyone | Show ad scheduler status (skill) |
+| `!ads on` | Mod/Broadcaster | Enable ad rotation via Synthfunc |
+| `!ads off` | Mod/Broadcaster | Disable ad rotation via Synthfunc |
 | `!id` | Everyone | Show the bot's Twitch user ID |
 
 ## Deployment

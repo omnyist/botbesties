@@ -264,6 +264,24 @@ async def create_member(
     return await _post("/members/", data)
 
 
+# --- Ads ---
+
+
+async def enable_ads(tenant_slug: str) -> dict | None:
+    """Enable the ad rotation scheduler."""
+    return await _post("/ads/enable", {}, tenant_slug=tenant_slug)
+
+
+async def disable_ads(tenant_slug: str) -> dict | None:
+    """Disable the ad rotation scheduler."""
+    return await _post("/ads/disable", {}, tenant_slug=tenant_slug)
+
+
+async def get_ads_status(tenant_slug: str) -> dict | None:
+    """Get the current ad scheduler status and config."""
+    return await _get("/ads/status", tenant_slug=tenant_slug)
+
+
 # --- Streams ---
 
 
