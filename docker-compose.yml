@@ -1,21 +1,9 @@
 services:
-  db:
-    image: postgres:16
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: synthhive
-      POSTGRES_USER: synthhive
-      POSTGRES_PASSWORD: synthhive
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   server:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      - db
     environment:
       - DATABASE_URL=postgresql://synthhive:synthhive@synthcore-postgres-1:5432/synthhive
       - REDIS_URL=redis://synthcore-redis-1:6379/1
@@ -38,7 +26,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - db
       - server
     environment:
       - DATABASE_URL=postgresql://synthhive:synthhive@synthcore-postgres-1:5432/synthhive
@@ -55,5 +42,3 @@ networks:
   synth:
     external: true
 
-volumes:
-  postgres_data:
