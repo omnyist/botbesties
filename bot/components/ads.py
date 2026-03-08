@@ -164,7 +164,7 @@ class AdAnnounce(commands.Component):
     async def _send_chat(self, broadcaster_id: str, message: str) -> None:
         """Send a chat message to a channel."""
         try:
-            broadcaster = self.bot.create_partialuser(id=broadcaster_id)
+            broadcaster = self.bot.create_partialuser(user_id=broadcaster_id)
             await broadcaster.send_message(
                 sender=self.bot.bot_id, message=message
             )

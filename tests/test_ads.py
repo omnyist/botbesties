@@ -191,7 +191,7 @@ class TestAdAnnounceComponent:
         raw = self._make_event("ads:running", {"duration": 90})
         await component._handle_event(b"events:testchannel:ads", raw)
 
-        mock_bot.create_partialuser.assert_called_once_with(id="99999")
+        mock_bot.create_partialuser.assert_called_once_with(user_id="99999")
         broadcaster = mock_bot.create_partialuser.return_value
         msg = broadcaster.send_message.call_args.kwargs["message"]
         assert "90" in msg
