@@ -16,6 +16,19 @@ from core.twitch import twitch_request
 logger = logging.getLogger("bot")
 
 
+CHEMICALS = [
+    "serotonin",
+    "dopamine",
+    "oxytocin",
+    "endorphins",
+    "copium",
+    "hopium",
+    "adrenaline",
+    "melatonin",
+    "norepinephrine",
+]
+
+
 def _ordinal(n: int) -> str:
     """Format an integer as an ordinal string (1st, 2nd, 3rd, 14th, etc.)."""
     if 11 <= (n % 100) <= 13:
@@ -117,9 +130,12 @@ class LizardRouletteHandler(SkillHandler):
             # Win
             success = config.get(
                 "success",
-                "*click* You survived $(user). Congrats, have some serotonin. bardLizard",
+                "*click* You survived $(user). Congrats, have some $(chemical). bardLizard",
             )
-            message = success.replace("$(user)", chatter_name)
+            chemical = random.choice(CHEMICALS)
+            message = success.replace("$(user)", chatter_name).replace(
+                "$(chemical)", chemical
+            )
             await send_reply(payload, message, bot_id=bot.bot_id)
 
     async def _update_stat(self, channel, twitch_id, username, stat_key):
