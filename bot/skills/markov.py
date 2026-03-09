@@ -17,6 +17,8 @@ from core.synthfunc import get_chat_messages
 logger = logging.getLogger("bot")
 
 CACHE_TTL = 21600  # 6 hours
+CANDIDATES = 10
+MIN_WORDS = 5
 START = "\x02"
 END = "\x03"
 SEP = "\x00"
@@ -150,7 +152,12 @@ class MarkovHandler(SkillHandler):
             return None
 
         chain = json.loads(raw)
-        return generate_sentence(chain)
+        candidates = [generate_sentence(chain) for _ in range(CANDIDATES)]
+        candidates = [s for s in candidates if s is not None]
+        if not candidates:
+            return None
+        long = [s for s in candidates if len(s.split()) >= MIN_WORDS]
+        return random.choice(long) if long else max(candidates, key=len)
 
 
 register_skill(MarkovHandler())
