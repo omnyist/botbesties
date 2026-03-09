@@ -25,18 +25,16 @@ SEP = "\x00"
 
 
 def build_chain(messages: list[str]) -> dict[str, list[str]]:
-    """Build a 2nd-order Markov chain from a list of messages."""
+    """Build a 1st-order Markov chain from a list of messages."""
     chain: dict[str, list[str]] = {}
     for msg in messages:
         words = msg.split()
         if len(words) < 3:
             continue
-        chain.setdefault(f"{START}{SEP}{words[0]}", []).append(words[1])
-        for i in range(len(words) - 2):
-            chain.setdefault(f"{words[i]}{SEP}{words[i + 1]}", []).append(
-                words[i + 2]
-            )
-        chain.setdefault(f"{words[-2]}{SEP}{words[-1]}", []).append(END)
+        chain.setdefault(START, []).append(words[0])
+        for i in range(len(words) - 1):
+            chain.setdefault(words[i], []).append(words[i + 1])
+        chain.setdefault(words[-1], []).append(END)
     return chain
 
 
@@ -44,23 +42,20 @@ def generate_sentence(
     chain: dict[str, list[str]], max_words: int = 30
 ) -> str | None:
     """Walk the chain to produce a sentence."""
-    start_keys = [k for k in chain if k.startswith(START)]
-    if not start_keys:
+    if START not in chain:
         return None
 
-    key = random.choice(start_keys)
-    _, word1 = key.split(SEP)
-    word2 = random.choice(chain[key])
-    words = [word1, word2]
+    word = random.choice(chain[START])
+    words = [word]
 
-    for _ in range(max_words - 2):
-        key = f"{words[-2]}{SEP}{words[-1]}"
-        if key not in chain:
+    for _ in range(max_words - 1):
+        if word not in chain:
             break
-        next_word = random.choice(chain[key])
+        next_word = random.choice(chain[word])
         if next_word == END:
             break
         words.append(next_word)
+        word = next_word
 
     return " ".join(words)
 
