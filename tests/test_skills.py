@@ -1661,7 +1661,8 @@ class TestLizardBulletsComponent:
         discover_skills()
         SKILL_REGISTRY["lizardroulette"]._bullets.clear()
 
-    def test_tick_loads_gun_on_hit(self):
+    @pytest.mark.asyncio
+    async def test_tick_loads_gun_on_hit(self):
         from bot.components.lizardbullets import LizardBullets
 
         mock_bot = MagicMock()
@@ -1674,13 +1675,18 @@ class TestLizardBulletsComponent:
 
         component = LizardBullets(mock_bot)
 
-        with patch("bot.components.lizardbullets.random.randint", return_value=1):
-            component._tick_channel(mock_bot._channel_map["spoonee"])
+        with (
+            patch.object(component, "_is_live", return_value=True),
+            patch.object(component, "_get_channel", return_value=MagicMock()),
+            patch("bot.components.lizardbullets.random.randint", return_value=1),
+        ):
+            await component._tick_channel(mock_bot._channel_map["spoonee"])
 
         handler = SKILL_REGISTRY["lizardroulette"]
         assert handler._bullets["78238052"] == 6
 
-    def test_tick_no_load_on_miss(self):
+    @pytest.mark.asyncio
+    async def test_tick_no_load_on_miss(self):
         from bot.components.lizardbullets import LizardBullets
 
         mock_bot = MagicMock()
@@ -1693,8 +1699,36 @@ class TestLizardBulletsComponent:
 
         component = LizardBullets(mock_bot)
 
-        with patch("bot.components.lizardbullets.random.randint", return_value=2):
-            component._tick_channel(mock_bot._channel_map["spoonee"])
+        with (
+            patch.object(component, "_is_live", return_value=True),
+            patch.object(component, "_get_channel", return_value=MagicMock()),
+            patch("bot.components.lizardbullets.random.randint", return_value=2),
+        ):
+            await component._tick_channel(mock_bot._channel_map["spoonee"])
+
+        handler = SKILL_REGISTRY["lizardroulette"]
+        assert handler._bullets.get("78238052", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_tick_skips_when_offline(self):
+        from bot.components.lizardbullets import LizardBullets
+
+        mock_bot = MagicMock()
+        mock_bot._channel_map = {
+            "spoonee": {
+                "name": "spoonee",
+                "twitch_channel_id": "78238052",
+            }
+        }
+
+        component = LizardBullets(mock_bot)
+
+        with (
+            patch.object(component, "_is_live", return_value=False),
+            patch.object(component, "_get_channel", return_value=MagicMock()),
+            patch("bot.components.lizardbullets.random.randint", return_value=1),
+        ):
+            await component._tick_channel(mock_bot._channel_map["spoonee"])
 
         handler = SKILL_REGISTRY["lizardroulette"]
         assert handler._bullets.get("78238052", 0) == 0
