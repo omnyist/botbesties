@@ -1933,6 +1933,43 @@ class TestLizardRouletteHandler:
         assert "$(victim)" not in msg
         assert "TestUser" in msg
 
+    async def test_self_victim_uses_self_clauses(self, channel):
+        channel.owner_access_token = "fake_token"
+        channel.save()
+
+        from core.models import Skill
+
+        Skill.objects.create(
+            channel=channel,
+            name="lizardroulette",
+            enabled=True,
+            config={"odds": 0, "cooldown": 0},
+        )
+
+        handler = SKILL_REGISTRY["lizardroulette"]
+        handler._last_victim["99999"] = "TestUser"
+
+        bot = MagicMock()
+        bot.bot_id = "00000"
+
+        from bot.router import CommandRouter
+
+        router = CommandRouter(bot)
+
+        payload = MockPayload(
+            text="!lizardroulette",
+            broadcaster=MockBroadcaster(id=99999),
+        )
+        await router.event_message(payload)
+
+        msg = payload.broadcaster.send_message.call_args.kwargs["message"]
+        assert "TestUser" in msg
+        for clause in ["wasn't so lucky", "still eating", "seat is still warm",
+                       "watching from", "could never", "seething",
+                       "WISHES", "rolling in", "had the decency",
+                       "filing a complaint", "died so", "COOKED"]:
+            assert clause not in msg
+
 
 # --- Streak tier and composition tests ---
 
@@ -1981,8 +2018,9 @@ class TestComposeMessage:
             "openers": ["OPEN"],
             "bodies": ["BODY"],
             "victim_clauses": ["VICTIM"],
+            "self_victim_clauses": ["SELF"],
         }
-        msg = _compose_message(tier, has_victim=False)
+        msg = _compose_message(tier, victim="", is_self_victim=False)
         assert msg == "OPEN BODY bardLizard"
         assert "VICTIM" not in msg
 
@@ -1993,9 +2031,23 @@ class TestComposeMessage:
             "openers": ["OPEN"],
             "bodies": ["BODY"],
             "victim_clauses": ["VICTIM"],
+            "self_victim_clauses": ["SELF"],
         }
-        msg = _compose_message(tier, has_victim=True)
+        msg = _compose_message(tier, victim="SomeUser", is_self_victim=False)
         assert msg == "OPEN BODY VICTIM bardLizard"
+
+    def test_with_self_victim(self):
+        from bot.skills.lizardroulette import _compose_message
+
+        tier = {
+            "openers": ["OPEN"],
+            "bodies": ["BODY"],
+            "victim_clauses": ["VICTIM"],
+            "self_victim_clauses": ["SELF"],
+        }
+        msg = _compose_message(tier, victim="SameUser", is_self_victim=True)
+        assert msg == "OPEN BODY SELF bardLizard"
+        assert "VICTIM" not in msg
 
 
 # --- LizardBullets component tests ---

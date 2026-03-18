@@ -47,6 +47,11 @@ STREAK_TIERS = [
             "The lizard's still eating $(victim)...",
             "$(victim)'s seat is still warm.",
         ],
+        "self_victim_clauses": [
+            "Looks like the lizard shot a corpse.",
+            "Wait, didn't $(user) just die?",
+            "The lizard checks its notes. Weren't you just here?",
+        ],
     },
     {
         "min": 3,
@@ -65,6 +70,11 @@ STREAK_TIERS = [
             "$(victim) is watching from the shadow realm.",
             "$(victim) could never.",
             "$(victim) is seething, in Minecraft.",
+        ],
+        "self_victim_clauses": [
+            "Somehow back from the dead and thriving.",
+            "The shadow realm couldn't hold $(user).",
+            "$(user) speedran the respawn timer.",
         ],
     },
     {
@@ -85,6 +95,11 @@ STREAK_TIERS = [
             "$(victim) is rolling in their grave.",
             "At least $(victim) had the decency to get shot.",
         ],
+        "self_victim_clauses": [
+            "$(user) came back from the grave and chose violence.",
+            "Died and came back stronger. The lizard is shook.",
+            "$(user) used a phoenix down apparently.",
+        ],
     },
     {
         "min": 8,
@@ -104,6 +119,11 @@ STREAK_TIERS = [
             "$(victim) died so $(user) could live. Disgusting.",
             "$(victim) is COOKED.",
         ],
+        "self_victim_clauses": [
+            "$(user) died, respawned, and is now immortal. The lizard quits.",
+            "Back from the grave $(streak) times?! This is a ZOMBIE.",
+            "$(user) keeps dying and coming back. The lizard is filing a bug report.",
+        ],
     },
 ]
 
@@ -116,14 +136,18 @@ def _get_streak_tier(streak: int) -> dict:
     return STREAK_TIERS[-1]
 
 
-def _compose_message(tier: dict, has_victim: bool) -> str:
+def _compose_message(tier: dict, victim: str, is_self_victim: bool) -> str:
     """Pick random fragments from a tier and compose them."""
     opener = random.choice(tier["openers"])
     body = random.choice(tier["bodies"])
 
-    if has_victim and tier.get("victim_clauses"):
-        victim_clause = random.choice(tier["victim_clauses"])
-        return f"{opener} {body} {victim_clause} bardLizard"
+    if is_self_victim and tier.get("self_victim_clauses"):
+        clause = random.choice(tier["self_victim_clauses"])
+        return f"{opener} {body} {clause} bardLizard"
+
+    if victim and tier.get("victim_clauses"):
+        clause = random.choice(tier["victim_clauses"])
+        return f"{opener} {body} {clause} bardLizard"
 
     return f"{opener} {body} bardLizard"
 
@@ -237,7 +261,8 @@ class LizardRouletteHandler(SkillHandler):
             )
             tier = _get_streak_tier(streak)
             victim = self._last_victim.get(broadcaster_id, "")
-            message = _compose_message(tier, bool(victim))
+            is_self_victim = victim == chatter_name
+            message = _compose_message(tier, victim, is_self_victim)
             chemical = random.choice(CHEMICALS)
             message = (
                 message.replace("$(user)", chatter_name)
