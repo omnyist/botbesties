@@ -23,11 +23,13 @@ VALID_COMMAND_NAME = re.compile(r"^[a-zA-Z0-9_]+$")
 # --- Auth helpers ---
 
 
-def _require_auth(request):
+async def _require_auth(request):
     """Check that the request is authenticated, raise 401 if not."""
-    if not request.user.is_authenticated:
+    user = await sync_to_async(lambda: request.user)()
+    is_auth = await sync_to_async(lambda: user.is_authenticated)()
+    if not is_auth:
         raise HttpError(401, "Not authenticated")
-    return request.user
+    return user
 
 
 async def _get_profile(user) -> TwitchProfile:
@@ -45,7 +47,7 @@ async def _get_user_channel(request, channel_id: uuid.UUID) -> tuple:
 
     Returns (channel, profile) to avoid redundant profile lookups.
     """
-    user = _require_auth(request)
+    user = await _require_auth(request)
     profile = await _get_profile(user)
 
     try:
@@ -63,7 +65,7 @@ async def _get_user_channel(request, channel_id: uuid.UUID) -> tuple:
 
 async def _get_user_command(request, command_id: uuid.UUID) -> Command:
     """Verify the authenticated user owns this command's channel, or raise."""
-    user = _require_auth(request)
+    user = await _require_auth(request)
     profile = await _get_profile(user)
 
     try:
@@ -99,7 +101,7 @@ class MeSchema(Schema):
 @v1_router.get("/me", response=MeSchema)
 async def me(request):
     """Return the authenticated user's info and their channels."""
-    user = _require_auth(request)
+    user = await _require_auth(request)
     profile = await _get_profile(user)
 
     channels = []
@@ -129,7 +131,7 @@ async def me(request):
 @v1_router.get("/channels/", response=list[ChannelBriefSchema])
 async def list_channels(request):
     """List channels the authenticated user owns."""
-    user = _require_auth(request)
+    user = await _require_auth(request)
     profile = await _get_profile(user)
 
     channels = []
@@ -271,9 +273,9 @@ async def delete_command(request, command_id: uuid.UUID):
 
 
 @v1_router.get("/variables/schema/")
-def variable_schema(request):
+async def variable_schema(request):
     """Return the variable registry schema for autocomplete."""
-    _require_auth(request)
+    await _require_auth(request)
 
     from bot.variables import create_registry
 
