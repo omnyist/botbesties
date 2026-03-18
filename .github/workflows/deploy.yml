@@ -24,6 +24,7 @@ jobs:
           FERNET_KEY=${{ secrets.FERNET_KEY }}
           SYNTHFUNC_API_URL=${{ vars.SYNTHFUNC_API_URL }}
           SYNTHFUNC_API_KEY=${{ secrets.SYNTHFUNC_API_KEY }}
+          DASHBOARD_ALLOWED_TWITCH_IDS=${{ vars.DASHBOARD_ALLOWED_TWITCH_IDS }}
           EOF
 
       - name: Deploy with Docker

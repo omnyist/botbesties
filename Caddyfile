@@ -1,0 +1,27 @@
+:80 {
+	handle /api/* {
+		reverse_proxy server:7177
+	}
+
+	handle /admin/* {
+		reverse_proxy server:7177
+	}
+
+	handle /auth/* {
+		reverse_proxy server:7177
+	}
+
+	handle /setup/* {
+		reverse_proxy server:7177
+	}
+
+	handle /static/* {
+		reverse_proxy server:7177
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -9,8 +9,6 @@ services:
       - REDIS_URL=redis://synthcore-redis-1:6379/1
     volumes:
       - .:/app
-    ports:
-      - "7177:7177"
     networks:
       - default
       - synth
@@ -37,8 +35,40 @@ services:
       - synth
     command: uv run python manage.py runbot
 
+  frontend-build:
+    image: oven/bun:latest
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend_dist:/app/dist
+    command: sh -c "bun install --frozen-lockfile && bun run build"
+    restart: "no"
+
+  caddy:
+    image: caddy:2
+    container_name: synthhive-caddy
+    restart: unless-stopped
+    depends_on:
+      - server
+      - frontend-build
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - frontend_dist:/srv/frontend:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "7177:80"
+    networks:
+      - default
+      - synth
+
 networks:
   default:
   synth:
     external: true
+
+volumes:
+  frontend_dist:
+  caddy_data:
+  caddy_config:
 
