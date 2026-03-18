@@ -122,7 +122,7 @@ export function CommandForm({ channelId, command, onClose, onSaved }: CommandFor
   }
 
   return (
-    <div className="flex flex-col gap-4 border-t border-hive-border pt-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-l border-hive-border pl-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">
           {isNew ? 'New Command' : `Editing: !${command.name}`}

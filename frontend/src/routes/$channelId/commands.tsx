@@ -46,7 +46,7 @@ function CommandsPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
+    <div className="flex flex-1 gap-4 overflow-hidden p-4">
       <CommandList
         commands={commands}
         selectedId={selectedId}

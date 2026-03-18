@@ -32,7 +32,7 @@ export function CommandList({ commands, selectedId, onSelect, onNew }: CommandLi
   )
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-80 shrink-0 flex-col gap-2 overflow-hidden">
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -47,7 +47,7 @@ export function CommandList({ commands, selectedId, onSelect, onNew }: CommandLi
           + New
         </button>
       </div>
-      <div className="flex flex-col gap-px overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto">
         {filtered.map((cmd) => (
           <button
             key={cmd.id}
