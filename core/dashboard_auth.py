@@ -183,7 +183,7 @@ async def _get_or_create_user(
 
     try:
         user = await sync_to_async(User.objects.create_user)(
-            username=f"twitch_{twitch_id}",
+            username=twitch_username,
             password=None,
         )
 

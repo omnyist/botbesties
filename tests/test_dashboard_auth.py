@@ -93,7 +93,7 @@ class TestTwitchCallback:
 
         assert response.status_code == 302
         assert response.url == "/"
-        assert User.objects.filter(username="twitch_38981465").exists()
+        assert User.objects.filter(username="avalonstar").exists()
         assert TwitchProfile.objects.filter(twitch_id="38981465").exists()
 
     @patch("core.dashboard_auth.httpx.AsyncClient")
