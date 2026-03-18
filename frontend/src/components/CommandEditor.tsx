@@ -70,6 +70,7 @@ export function CommandEditor({ value, onChange, height = '120px' }: CommandEdit
           padding: { top: 8, bottom: 8 },
           suggestOnTriggerCharacters: true,
           quickSuggestions: true,
+          fixedOverflowWidgets: true,
         }}
       />
     </div>
