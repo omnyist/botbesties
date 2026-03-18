@@ -1,22 +1,10 @@
 :80 {
-	handle /api/* {
-		reverse_proxy server:7177
-	}
+	@backend path /api/* /admin/* /auth/* /setup/* /static/*
 
-	handle /admin/* {
-		reverse_proxy server:7177
-	}
-
-	handle /auth/* {
-		reverse_proxy server:7177
-	}
-
-	handle /setup/* {
-		reverse_proxy server:7177
-	}
-
-	handle /static/* {
-		reverse_proxy server:7177
+	handle @backend {
+		reverse_proxy server:7177 {
+			header_up X-Forwarded-Proto https
+		}
 	}
 
 	handle {
