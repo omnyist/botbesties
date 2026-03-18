@@ -21,18 +21,18 @@ interface Command {
   updated_at: string
 }
 
-export const Route = createFileRoute('/$channelId/commands')({
+export const Route = createFileRoute('/$channelSlug/commands')({
   component: CommandsPage,
 })
 
 function CommandsPage() {
-  const { channelId } = Route.useParams()
+  const { channelSlug } = Route.useParams()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isNew, setIsNew] = useState(false)
 
   const { data: commands = [], isLoading } = useQuery<Command[]>({
-    queryKey: ['commands', channelId],
-    queryFn: () => api<Command[]>(`/api/v1/commands/channels/${channelId}/`),
+    queryKey: ['commands', channelSlug],
+    queryFn: () => api<Command[]>(`/api/v1/commands/channels/${channelSlug}/`),
   })
 
   const selectedCommand = selectedId ? commands.find((c) => c.id === selectedId) ?? null : null
@@ -61,7 +61,7 @@ function CommandsPage() {
       />
       {(selectedCommand || isNew) && (
         <CommandForm
-          channelId={channelId}
+          channelSlug={channelSlug}
           command={isNew ? null : selectedCommand}
           onClose={() => {
             setSelectedId(null)

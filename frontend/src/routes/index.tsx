@@ -33,8 +33,8 @@ function Index() {
   useEffect(() => {
     if (user && user.channels.length > 0) {
       navigate({
-        to: '/$channelId/commands',
-        params: { channelId: user.channels[0].id },
+        to: '/$channelSlug/commands',
+        params: { channelSlug: user.channels[0].name },
       })
     }
   }, [user, navigate])

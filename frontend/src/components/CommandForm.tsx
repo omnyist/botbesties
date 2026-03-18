@@ -18,7 +18,7 @@ interface Command {
 }
 
 interface CommandFormProps {
-  channelId: string
+  channelSlug: string
   command: Command | null
   onClose: () => void
   onSaved: () => void
@@ -62,7 +62,7 @@ function initialState(cmd: Command | null): FormState {
   }
 }
 
-export function CommandForm({ channelId, command, onClose, onSaved }: CommandFormProps) {
+export function CommandForm({ channelSlug, command, onClose, onSaved }: CommandFormProps) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<FormState>(() => initialState(command))
   const [error, setError] = useState<string | null>(null)
@@ -78,7 +78,7 @@ export function CommandForm({ channelId, command, onClose, onSaved }: CommandFor
       const body = { ...form }
 
       if (isNew) {
-        return api(`/api/v1/commands/channels/${channelId}/`, {
+        return api(`/api/v1/commands/channels/${channelSlug}/`, {
           method: 'POST',
           body: JSON.stringify(body),
         })
@@ -90,7 +90,7 @@ export function CommandForm({ channelId, command, onClose, onSaved }: CommandFor
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['commands', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['commands', channelSlug] })
       onSaved()
     },
     onError: (err: Error) => {
@@ -102,7 +102,7 @@ export function CommandForm({ channelId, command, onClose, onSaved }: CommandFor
     mutationFn: () =>
       api(`/api/v1/commands/${command!.id}/`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['commands', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['commands', channelSlug] })
       onClose()
     },
     onError: (err: Error) => {

@@ -133,7 +133,7 @@ class TestCommandList:
         _make_cmd(test_channel, name="conch", enabled=False)
 
         response = authed_client.get(
-            f"/api/v1/commands/channels/{test_channel.id}/"
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/"
         )
         assert response.status_code == 200
         data = response.json()
@@ -142,15 +142,15 @@ class TestCommandList:
         assert "lurk" in names
         assert "conch" in names
 
-    def test_forbidden_for_non_owner(self, other_client, test_channel):
+    def test_not_found_for_non_owner(self, other_client, test_channel):
         response = other_client.get(
-            f"/api/v1/commands/channels/{test_channel.id}/"
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/"
         )
-        assert response.status_code == 403
+        assert response.status_code == 404
 
     def test_unauthenticated_returns_401(self, unauthed_client, test_channel):
         response = unauthed_client.get(
-            f"/api/v1/commands/channels/{test_channel.id}/"
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/"
         )
         assert response.status_code == 401
 
@@ -158,7 +158,7 @@ class TestCommandList:
 class TestCommandCreate:
     def test_creates_command(self, authed_client, test_channel):
         response = authed_client.post(
-            f"/api/v1/commands/channels/{test_channel.id}/",
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/",
             data=json.dumps({"name": "hello", "response": "Hello $(user)!"}),
             content_type="application/json",
         )
@@ -173,7 +173,7 @@ class TestCommandCreate:
 
     def test_create_with_config(self, authed_client, test_channel):
         response = authed_client.post(
-            f"/api/v1/commands/channels/{test_channel.id}/",
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/",
             data=json.dumps({
                 "name": "flask",
                 "type": "lottery",
@@ -190,13 +190,13 @@ class TestCommandCreate:
         assert data["type"] == "lottery"
         assert data["config"]["odds"] == 25
 
-    def test_forbidden_for_non_owner(self, other_client, test_channel):
+    def test_not_found_for_non_owner(self, other_client, test_channel):
         response = other_client.post(
-            f"/api/v1/commands/channels/{test_channel.id}/",
+            f"/api/v1/commands/channels/{test_channel.twitch_channel_name}/",
             data=json.dumps({"name": "nope"}),
             content_type="application/json",
         )
-        assert response.status_code == 403
+        assert response.status_code == 404
 
 
 class TestCommandGet:

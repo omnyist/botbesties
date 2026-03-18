@@ -46,7 +46,7 @@ function Sidebar({ user }: { user: MeResponse }) {
   const matchRoute = useMatchRoute()
   const currentChannel = user.channels.length > 0 ? user.channels[0] : null
   const isCommands = currentChannel
-    ? matchRoute({ to: '/$channelId/commands', params: { channelId: currentChannel.id } })
+    ? matchRoute({ to: '/$channelSlug/commands', params: { channelSlug: currentChannel.name } })
     : false
 
   return (
@@ -57,8 +57,8 @@ function Sidebar({ user }: { user: MeResponse }) {
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {currentChannel && (
           <Link
-            to="/$channelId/commands"
-            params={{ channelId: currentChannel.id }}
+            to="/$channelSlug/commands"
+            params={{ channelSlug: currentChannel.name }}
             className={cn(
               'rounded px-3 py-1.5 text-sm transition-colors',
               isCommands

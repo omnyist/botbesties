@@ -42,7 +42,7 @@ async def _get_profile(user) -> TwitchProfile:
         raise HttpError(403, "No Twitch profile linked")
 
 
-async def _get_user_channel(request, channel_id: uuid.UUID) -> tuple:
+async def _get_user_channel(request, channel_slug: str) -> tuple:
     """Verify the authenticated user owns this channel, or raise 403.
 
     Returns (channel, profile) to avoid redundant profile lookups.
@@ -50,15 +50,18 @@ async def _get_user_channel(request, channel_id: uuid.UUID) -> tuple:
     user = await _require_auth(request)
     profile = await _get_profile(user)
 
-    try:
-        channel = await sync_to_async(
-            Channel.objects.select_related("bot").get
-        )(pk=channel_id, is_active=True)
-    except Channel.DoesNotExist:
-        raise HttpError(404, "Channel not found")
+    channel = await sync_to_async(
+        Channel.objects.filter(
+            twitch_channel_name=channel_slug,
+            twitch_channel_id=profile.twitch_id,
+            is_active=True,
+        )
+        .select_related("bot")
+        .first
+    )()
 
-    if channel.twitch_channel_id != profile.twitch_id:
-        raise HttpError(403, "Not authorized for this channel")
+    if not channel:
+        raise HttpError(404, "Channel not found")
 
     return channel, profile
 
@@ -190,11 +193,11 @@ class CommandUpdateSchema(Schema):
 
 
 @v1_router.get(
-    "/commands/channels/{channel_id}/", response=list[CommandSchema]
+    "/commands/channels/{channel_slug}/", response=list[CommandSchema]
 )
-async def list_commands(request, channel_id: uuid.UUID):
+async def list_commands(request, channel_slug: str):
     """List all commands for a channel (including disabled)."""
-    channel, _ = await _get_user_channel(request, channel_id)
+    channel, _ = await _get_user_channel(request, channel_slug)
 
     commands = []
     async for cmd in Command.objects.filter(channel=channel).order_by("name"):
@@ -202,9 +205,9 @@ async def list_commands(request, channel_id: uuid.UUID):
     return commands
 
 
-@v1_router.post("/commands/channels/{channel_id}/", response=CommandSchema)
+@v1_router.post("/commands/channels/{channel_slug}/", response=CommandSchema)
 async def create_command(
-    request, channel_id: uuid.UUID, data: CommandCreateSchema
+    request, channel_slug: str, data: CommandCreateSchema
 ):
     """Create a command for a channel."""
     if not data.name or not VALID_COMMAND_NAME.match(data.name):
@@ -212,7 +215,7 @@ async def create_command(
             422, "Command name must be non-empty and contain only letters, numbers, and underscores."
         )
 
-    channel, profile = await _get_user_channel(request, channel_id)
+    channel, profile = await _get_user_channel(request, channel_slug)
 
     try:
         cmd = await sync_to_async(Command.objects.create)(
