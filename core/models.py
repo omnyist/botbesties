@@ -2,9 +2,34 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from encrypted_fields import EncryptedTextField
+
+
+class TwitchProfile(models.Model):
+    """Links a Django User to their Twitch identity for dashboard auth.
+
+    Designed for multi-provider support — a DiscordProfile can be added
+    later alongside this, both linked to the same Django User.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="twitch_profile",
+    )
+    twitch_id = models.CharField(max_length=50, unique=True, db_index=True)
+    twitch_username = models.CharField(max_length=100)
+    twitch_display_name = models.CharField(max_length=100)
+    twitch_avatar = models.CharField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.twitch_display_name} ({self.twitch_id})"
 
 
 class Bot(models.Model):

@@ -14,16 +14,19 @@ from core.api import aliases_router
 from core.api import commands_router
 from core.api import counters_router
 from core.api import variables_router
+from core.api_v1 import v1_router
 
 api = NinjaAPI(urls_namespace="main")
 api.add_router("/commands/", commands_router)
 api.add_router("/counters/", counters_router)
 api.add_router("/aliases/", aliases_router)
 api.add_router("/variables/", variables_router)
+api.add_router("/v1/", v1_router)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", api.urls),
+    path("auth/", include("core.dashboard_auth_urls")),
     path("setup/", include("core.auth_urls")),
 ]
 
