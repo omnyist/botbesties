@@ -1,4 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
@@ -21,11 +22,22 @@ export const Route = createFileRoute('/')({
 })
 
 function Index() {
+  const navigate = useNavigate()
+
   const { data: user, isLoading } = useQuery<MeResponse>({
     queryKey: ['me'],
     queryFn: () => api<MeResponse>('/api/v1/me'),
     retry: false,
   })
+
+  useEffect(() => {
+    if (user && user.channels.length > 0) {
+      navigate({
+        to: '/$channelId/commands',
+        params: { channelId: user.channels[0].id },
+      })
+    }
+  }, [user, navigate])
 
   if (isLoading) {
     return (
@@ -48,27 +60,13 @@ function Index() {
     )
   }
 
+  if (user.channels.length > 0) {
+    return null
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <div className="flex items-center gap-3">
-        {user.twitch_avatar && (
-          <img src={user.twitch_avatar} alt="" className="h-10 w-10 rounded-full" />
-        )}
-        <span className="text-lg">{user.twitch_display_name}</span>
-      </div>
-      {user.channels.length > 0 ? (
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-sm text-hive-muted">Channels</p>
-          {user.channels.map((channel) => (
-            <p key={channel.id} className="text-hive-text">
-              {channel.name}
-              <span className="ml-2 text-xs text-hive-muted">({channel.bot_name})</span>
-            </p>
-          ))}
-        </div>
-      ) : (
-        <p className="text-hive-muted">No channels found.</p>
-      )}
+      <p className="text-hive-muted">No channels found.</p>
       <a
         href="/auth/logout/"
         className="text-sm text-hive-muted transition-colors hover:text-hive-text">
