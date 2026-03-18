@@ -5,6 +5,7 @@ import logging
 import secrets
 from base64 import urlsafe_b64decode
 from base64 import urlsafe_b64encode
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -15,16 +16,17 @@ from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import HttpResponseBadRequest
 from django.http import HttpResponseRedirect
+from django.utils import timezone
 
+from .models import Channel
 from .models import TwitchProfile
+from .scopes import CHANNEL_SCOPES
 
 logger = logging.getLogger(__name__)
 
 TWITCH_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize"
 TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_USERS_URL = "https://api.twitch.tv/helix/users"
-
-DASHBOARD_SCOPES = ["user:read:email"]
 
 
 def twitch_login(request: HttpRequest) -> HttpResponse:
@@ -41,7 +43,7 @@ def twitch_login(request: HttpRequest) -> HttpResponse:
         "client_id": settings.TWITCH_CLIENT_ID,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": " ".join(DASHBOARD_SCOPES),
+        "scope": " ".join(CHANNEL_SCOPES),
         "state": state,
     }
 
@@ -100,6 +102,8 @@ async def twitch_callback(request: HttpRequest) -> HttpResponse:
 
     token_data = token_response.json()
     access_token = token_data["access_token"]
+    refresh_token = token_data.get("refresh_token", "")
+    expires_in = token_data.get("expires_in", 3600)
 
     # Fetch Twitch user info.
     async with httpx.AsyncClient() as client:
@@ -147,6 +151,14 @@ async def twitch_callback(request: HttpRequest) -> HttpResponse:
         request, user, backend="django.contrib.auth.backends.ModelBackend"
     )
 
+    # Update channel tokens for channels this user owns.
+    await _update_channel_tokens(
+        twitch_id=twitch_id,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=expires_in,
+    )
+
     logger.info("Dashboard login: %s (%s)", twitch_display_name, twitch_id)
     return HttpResponseRedirect("/")
 
@@ -155,6 +167,61 @@ async def dashboard_logout(request: HttpRequest) -> HttpResponse:
     """Log out and redirect to the login page."""
     await sync_to_async(auth.logout)(request)
     return HttpResponseRedirect("/")
+
+
+async def _update_channel_tokens(
+    twitch_id: str,
+    access_token: str,
+    refresh_token: str,
+    expires_in: int,
+) -> None:
+    """Store channel owner tokens for all channels this user owns."""
+    from .synthfunc import save_token as synthfunc_save_token
+
+    expires_at = timezone.now() + timedelta(seconds=expires_in)
+
+    channels = []
+    async for channel in Channel.objects.filter(
+        twitch_channel_id=twitch_id, is_active=True
+    ):
+        channels.append(channel)
+
+    if not channels:
+        return
+
+    for channel in channels:
+        channel.owner_access_token = access_token
+        channel.owner_refresh_token = refresh_token
+        channel.owner_token_expires_at = expires_at
+        await sync_to_async(channel.save)(
+            update_fields=["owner_access_token", "owner_refresh_token", "owner_token_expires_at"]
+        )
+
+        logger.info(
+            "Channel owner token saved for #%s", channel.twitch_channel_name
+        )
+
+    # Push to Synthfunc as the source of truth.
+    try:
+        result = await synthfunc_save_token(
+            user_id=twitch_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
+        )
+        if result:
+            logger.info(
+                "Channel owner token pushed to Synthfunc for %s", twitch_id
+            )
+        else:
+            logger.warning(
+                "Failed to push channel owner token to Synthfunc for %s",
+                twitch_id,
+            )
+    except Exception:
+        logger.exception(
+            "Unexpected error pushing token to Synthfunc for %s", twitch_id
+        )
 
 
 async def _get_or_create_user(

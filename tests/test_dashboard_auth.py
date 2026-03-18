@@ -9,12 +9,33 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
+from core.models import Bot
+from core.models import Channel
 from core.models import TwitchProfile
 
 
 @pytest.fixture()
 def client(db):
     return Client()
+
+
+@pytest.fixture()
+def test_bot(db):
+    return Bot.objects.create(
+        name="TestBot",
+        twitch_user_id="66977097",
+        twitch_username="testbot",
+    )
+
+
+@pytest.fixture()
+def test_channel(test_bot):
+    return Channel.objects.create(
+        bot=test_bot,
+        twitch_channel_id="38981465",
+        twitch_channel_name="avalonstar",
+        is_active=True,
+    )
 
 
 TWITCH_USER_DATA = {
@@ -65,6 +86,11 @@ class TestTwitchLogin:
         response = client.get("/auth/twitch/login/")
         assert response.status_code == 302
         assert "id.twitch.tv/oauth2/authorize" in response.url
+
+    def test_requests_channel_scopes(self, client):
+        response = client.get("/auth/twitch/login/")
+        assert "moderator%3Amanage%3Abanned_users" in response.url
+        assert "channel%3Aread%3Asubscriptions" in response.url
 
     def test_state_contains_nonce(self, client):
         response = client.get("/auth/twitch/login/")
@@ -185,6 +211,187 @@ class TestTwitchCallback:
             "&error_description=User+denied"
         )
         assert response.status_code == 400
+
+
+class TestChannelTokenStorage:
+    @patch("core.dashboard_auth._update_channel_tokens")
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_login_calls_update_channel_tokens(
+        self, mock_client_cls, mock_update, client
+    ):
+        """Login triggers channel token update with the OAuth tokens."""
+        mock_update.return_value = None
+
+        nonce = "test-nonce-tokens"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        response = client.get(
+            f"/auth/twitch/callback/?code=test-code&state={state}"
+        )
+
+        assert response.status_code == 302
+        mock_update.assert_called_once_with(
+            twitch_id="38981465",
+            access_token="test-token",
+            refresh_token="test-refresh",
+            expires_in=3600,
+        )
+
+    @patch("core.synthfunc.save_token", new_callable=AsyncMock)
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_stores_tokens_on_channel(
+        self, mock_client_cls, mock_synthfunc, client, test_channel
+    ):
+        """Login stores OAuth tokens on matching Channel records."""
+        mock_synthfunc.return_value = {"status": "ok"}
+
+        nonce = "test-nonce-channel"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        response = client.get(
+            f"/auth/twitch/callback/?code=test-code&state={state}"
+        )
+
+        assert response.status_code == 302
+        test_channel.refresh_from_db()
+        assert test_channel.owner_access_token == "test-token"
+        assert test_channel.owner_refresh_token == "test-refresh"
+        assert test_channel.owner_token_expires_at is not None
+
+    @patch("core.synthfunc.save_token", new_callable=AsyncMock)
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_pushes_tokens_to_synthfunc(
+        self, mock_client_cls, mock_synthfunc, client, test_channel
+    ):
+        """Login pushes tokens to Synthfunc as source of truth."""
+        mock_synthfunc.return_value = {"status": "ok"}
+
+        nonce = "test-nonce-synth"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        client.get(f"/auth/twitch/callback/?code=test-code&state={state}")
+
+        mock_synthfunc.assert_called_once_with(
+            user_id="38981465",
+            access_token="test-token",
+            refresh_token="test-refresh",
+            expires_in=3600,
+        )
+
+    @patch("core.synthfunc.save_token", new_callable=AsyncMock)
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_updates_all_channels_for_owner(
+        self, mock_client_cls, mock_synthfunc, client, test_bot
+    ):
+        """Login updates tokens on all active channels the user owns."""
+        mock_synthfunc.return_value = {"status": "ok"}
+
+        bot2 = Bot.objects.create(
+            name="TestBot2",
+            twitch_user_id="149214941",
+            twitch_username="testbot2",
+        )
+        ch1 = Channel.objects.create(
+            bot=test_bot,
+            twitch_channel_id="38981465",
+            twitch_channel_name="avalonstar",
+            is_active=True,
+        )
+        ch2 = Channel.objects.create(
+            bot=bot2,
+            twitch_channel_id="38981465",
+            twitch_channel_name="avalonstar",
+            is_active=True,
+        )
+        bot3 = Bot.objects.create(
+            name="TestBot3",
+            twitch_user_id="99999999",
+            twitch_username="testbot3",
+        )
+        Channel.objects.create(
+            bot=bot3,
+            twitch_channel_id="38981465",
+            twitch_channel_name="avalonstar",
+            is_active=False,
+        )
+
+        nonce = "test-nonce-multi"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        client.get(f"/auth/twitch/callback/?code=test-code&state={state}")
+
+        ch1.refresh_from_db()
+        ch2.refresh_from_db()
+        assert ch1.owner_access_token == "test-token"
+        assert ch2.owner_access_token == "test-token"
+
+        inactive = Channel.objects.get(bot=bot3, is_active=False)
+        assert inactive.owner_access_token is None
+
+        mock_synthfunc.assert_called_once()
+
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_login_succeeds_without_channels(self, mock_client_cls, client):
+        """Login works when user has no channels (no token storage needed)."""
+        nonce = "test-nonce-nochan"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        response = client.get(
+            f"/auth/twitch/callback/?code=test-code&state={state}"
+        )
+
+        assert response.status_code == 302
+        assert response.url == "/"
+
+    @patch("core.synthfunc.save_token", new_callable=AsyncMock)
+    @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_synthfunc_failure_does_not_block_login(
+        self, mock_client_cls, mock_synthfunc, client, test_channel
+    ):
+        """Login succeeds even if Synthfunc push fails."""
+        mock_synthfunc.side_effect = Exception("Synthfunc down")
+
+        nonce = "test-nonce-fail"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        response = client.get(
+            f"/auth/twitch/callback/?code=test-code&state={state}"
+        )
+
+        assert response.status_code == 302
+        assert response.url == "/"
+        test_channel.refresh_from_db()
+        assert test_channel.owner_access_token == "test-token"
 
 
 class TestDashboardLogout:

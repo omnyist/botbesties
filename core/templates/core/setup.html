@@ -89,24 +89,7 @@
 
     {% for channel in channels %}
     <div class="section">
-        <h2>
-            #{{ channel.twitch_channel_name }}
-            {% if channel.is_owner_connected %}
-                <span class="status connected">Owner Connected</span>
-            {% else %}
-                <span class="status disconnected">Owner Not Connected</span>
-            {% endif %}
-        </h2>
-        <p style="font-size: 0.85rem; color: #adadb8;">
-            {% if channel.is_owner_connected %}
-                Channel owner has authorized the bot for moderation.
-            {% else %}
-                The channel owner needs to authorize the bot to perform moderation actions.
-            {% endif %}
-        </p>
-        <a class="btn btn-twitch" href="/setup/connect/?type=channel&bot_id={{ bot.id }}&channel_id={{ channel.id }}">
-            {% if channel.is_owner_connected %}Reconnect{% else %}Connect{% endif %} Channel Owner
-        </a>
+        <h2>#{{ channel.twitch_channel_name }}</h2>
 
         <div class="commands-list">
             <h2 style="margin-top: 1rem;">Commands</h2>
