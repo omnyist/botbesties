@@ -232,8 +232,8 @@ async def _get_or_create_user(
 ) -> tuple:
     """Find or create a Django User + TwitchProfile for the given Twitch account."""
     from django.contrib.auth.models import User
-    from django.db import IntegrityError
 
+    # Existing profile? Update and return.
     try:
         profile = await sync_to_async(
             TwitchProfile.objects.select_related("user").get
@@ -248,23 +248,25 @@ async def _get_or_create_user(
     except TwitchProfile.DoesNotExist:
         pass
 
-    try:
-        user = await sync_to_async(User.objects.create_user)(
+    # Get or create the Django User (may already exist from seed).
+    def _get_or_create_django_user():
+        user, created = User.objects.get_or_create(
             username=twitch_username,
-            password=None,
+            defaults={"password": "!"},
         )
+        if created:
+            user.set_unusable_password()
+            user.save(update_fields=["password"])
+        return user
 
-        profile = await sync_to_async(TwitchProfile.objects.create)(
-            user=user,
-            twitch_id=twitch_id,
-            twitch_username=twitch_username,
-            twitch_display_name=twitch_display_name,
-            twitch_avatar=twitch_avatar,
-        )
+    user = await sync_to_async(_get_or_create_django_user)()
 
-        return user, profile
-    except IntegrityError:
-        profile = await sync_to_async(
-            TwitchProfile.objects.select_related("user").get
-        )(twitch_id=twitch_id)
-        return profile.user, profile
+    profile = await sync_to_async(TwitchProfile.objects.create)(
+        user=user,
+        twitch_id=twitch_id,
+        twitch_username=twitch_username,
+        twitch_display_name=twitch_display_name,
+        twitch_avatar=twitch_avatar,
+    )
+
+    return user, profile

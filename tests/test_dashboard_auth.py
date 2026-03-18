@@ -151,6 +151,28 @@ class TestTwitchCallback:
         assert profile.twitch_avatar == "https://example.com/avatar.png"
 
     @patch("core.dashboard_auth.httpx.AsyncClient")
+    def test_creates_profile_for_existing_user(self, mock_client_cls, client):
+        User.objects.create_user(username="avalonstar")
+
+        nonce = "test-nonce-existing"
+        session = client.session
+        session["dashboard_oauth_nonce"] = nonce
+        session.save()
+
+        mock_client_cls.return_value = _mock_httpx()
+
+        state = _build_state(nonce)
+        response = client.get(
+            f"/auth/twitch/callback/?code=test-code&state={state}"
+        )
+
+        assert response.status_code == 302
+        assert response.url == "/"
+        profile = TwitchProfile.objects.get(twitch_id="38981465")
+        assert profile.user.username == "avalonstar"
+        assert profile.twitch_display_name == "Avalonstar"
+
+    @patch("core.dashboard_auth.httpx.AsyncClient")
     def test_denies_user_not_in_allowlist(self, mock_client_cls, client):
         nonce = "test-nonce-789"
         session = client.session
