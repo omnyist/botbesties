@@ -144,15 +144,15 @@ DEATH_TIERS = [
         "messages": [
             "For the $(deaths) time, you lose, $(user). 3, 2, 1...",
             "$(deaths) time's the charm? Nope. $(user) goes down. 3, 2, 1...",
-            "$(user) again?! That's $(deaths). 3, 2, 1...",
+            "$(user) again?! That's $(raw_deaths). 3, 2, 1...",
         ],
     },
     {
         "min": 10,
         "max": 24,
         "messages": [
-            "$(deaths) deaths, $(user). The lizard is starting to recognize you. 3, 2, 1...",
-            "$(user), $(deaths) times now. You might have a problem. 3, 2, 1...",
+            "$(raw_deaths) deaths, $(user). The lizard is starting to recognize you. 3, 2, 1...",
+            "$(user), $(raw_deaths) times now. You might have a problem. 3, 2, 1...",
             "The lizard nods at $(user). A familiar face. Death #$(raw_deaths). 3, 2, 1...",
         ],
     },
