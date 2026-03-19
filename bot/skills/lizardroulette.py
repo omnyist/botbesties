@@ -128,12 +128,72 @@ STREAK_TIERS = [
 ]
 
 
-def _get_streak_tier(streak: int) -> dict:
-    """Return the tier dict for the given streak count."""
-    for tier in STREAK_TIERS:
-        if streak >= tier["min"] and (tier["max"] is None or streak <= tier["max"]):
+DEATH_TIERS = [
+    {
+        "min": 1,
+        "max": 1,
+        "messages": [
+            "You lose, $(user). Reach for the sky. 3, 2, 1...",
+            "$(user) goes down. First time's free. 3, 2, 1...",
+            "Welcome to the club, $(user). 3, 2, 1...",
+        ],
+    },
+    {
+        "min": 2,
+        "max": 9,
+        "messages": [
+            "For the $(deaths) time, you lose, $(user). 3, 2, 1...",
+            "$(deaths) time's the charm? Nope. $(user) goes down. 3, 2, 1...",
+            "$(user) again?! That's $(deaths). 3, 2, 1...",
+        ],
+    },
+    {
+        "min": 10,
+        "max": 24,
+        "messages": [
+            "$(deaths) deaths, $(user). The lizard is starting to recognize you. 3, 2, 1...",
+            "$(user), $(deaths) times now. You might have a problem. 3, 2, 1...",
+            "The lizard nods at $(user). A familiar face. Death #$(raw_deaths). 3, 2, 1...",
+        ],
+    },
+    {
+        "min": 25,
+        "max": 49,
+        "messages": [
+            "$(raw_deaths) deaths. $(user), the lizard has a punch card with your name on it. 3, 2, 1...",
+            "$(user) at $(raw_deaths). The lizard doesn't even aim anymore. 3, 2, 1...",
+            "Death #$(raw_deaths) for $(user). At this point it's a subscription. 3, 2, 1...",
+        ],
+    },
+    {
+        "min": 50,
+        "max": 99,
+        "messages": [
+            "$(raw_deaths). FIFTY-PLUS deaths, $(user). The lizard is concerned for your wellbeing. 3, 2, 1...",
+            "$(user), death #$(raw_deaths). The shadow realm has a reserved seat with your name on it. 3, 2, 1...",
+            "$(raw_deaths) times, $(user). The lizard is running out of bullets because of YOU. 3, 2, 1...",
+        ],
+    },
+    {
+        "min": 100,
+        "max": None,
+        "messages": [
+            "$(raw_deaths). $(user), you are CLINICALLY addicted to dying. The lizard is speechless. 3, 2, 1...",
+            "Death #$(raw_deaths) for $(user). The lizard has retired and been replaced twice since you started. 3, 2, 1...",
+            "$(user). $(raw_deaths) deaths. The lizard wrote a thesis about you. 3, 2, 1...",
+        ],
+    },
+]
+
+DEATH_EMOTE = "LizardWithAGun"
+
+
+def _get_tier(tiers: list[dict], value: int) -> dict:
+    """Return the tier dict for the given value."""
+    for tier in tiers:
+        if value >= tier["min"] and (tier["max"] is None or value <= tier["max"]):
             return tier
-    return STREAK_TIERS[-1]
+    return tiers[-1]
 
 
 def _compose_message(tier: dict, victim: str, is_self_victim: bool) -> str:
@@ -226,21 +286,15 @@ class LizardRouletteHandler(SkillHandler):
             await self._set_stat(channel, chatter_id, chatter.name, "streak", 0)
             self._last_victim[broadcaster_id] = chatter_name
 
-            if deaths == 1:
-                failure = config.get(
-                    "failure_first",
-                    "You lose $(user). Reach for the sky. 3, 2, 1... LizardWithAGun",
-                )
-            else:
-                failure = config.get(
-                    "failure",
-                    "Damnit, for the $(deaths) time, you lose $(user). Reach for the sky. 3, 2, 1... LizardWithAGun",
-                )
+            death_tier = _get_tier(DEATH_TIERS, deaths)
+            failure = random.choice(death_tier["messages"])
             message = (
                 failure.replace("$(user)", chatter_name)
                 .replace("$(deaths)", _ordinal(deaths))
+                .replace("$(raw_deaths)", str(deaths))
                 .replace("$(streak)", str(broken_streak))
             )
+            message = f"{message} {DEATH_EMOTE}"
             await send_reply(payload, message, bot_id=bot.bot_id)
 
             timeout_delay = config.get("timeout_delay", 5)
@@ -259,7 +313,7 @@ class LizardRouletteHandler(SkillHandler):
             streak = await self._update_stat(
                 channel, chatter_id, chatter.name, "streak"
             )
-            tier = _get_streak_tier(streak)
+            tier = _get_tier(STREAK_TIERS, streak)
             victim = self._last_victim.get(broadcaster_id, "")
             is_self_victim = victim == chatter_name
             message = _compose_message(tier, victim, is_self_victim)

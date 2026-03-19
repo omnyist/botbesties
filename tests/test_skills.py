@@ -1068,9 +1068,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "success": "you survived $(user)!",
-                "failure_first": "you lose $(user)!",
-                "failure": "you lose $(user)!",
                 "timeout_duration": 600,
                 "timeout_delay": 0,
                 "cooldown": 0,
@@ -1102,7 +1099,8 @@ class TestLizardRouletteHandler:
             # Verify failure message sent
             payload.broadcaster.send_message.assert_called_once()
             msg = payload.broadcaster.send_message.call_args.kwargs["message"]
-            assert msg == "you lose TestUser!"
+            assert "TestUser" in msg
+            assert "LizardWithAGun" in msg
 
             # Verify timeout API called
             mock_twitch.assert_called_once()
@@ -1257,8 +1255,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure_first": "you lose $(user)!",
-                "failure": "you lose $(user)!",
                 "timeout_failed": "...the gun jammed. $(user) lives another day.",
                 "timeout_delay": 0,
                 "cooldown": 0,
@@ -1289,7 +1285,7 @@ class TestLizardRouletteHandler:
 
         calls = payload.broadcaster.send_message.call_args_list
         assert len(calls) == 2
-        assert calls[0].kwargs["message"] == "you lose TestUser!"
+        assert "LizardWithAGun" in calls[0].kwargs["message"]
         assert (
             calls[1].kwargs["message"]
             == "...the gun jammed. TestUser lives another day."
@@ -1300,6 +1296,7 @@ class TestLizardRouletteHandler:
         channel.save()
 
         from core.models import Skill
+        from core.models import SkillStat
 
         Skill.objects.create(
             channel=channel,
@@ -1307,8 +1304,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure_first": "first shot for $(user)!",
-                "failure": "shot $(user) for the $(deaths) time!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1324,7 +1319,7 @@ class TestLizardRouletteHandler:
 
         router = CommandRouter(bot)
 
-        # First death — uses failure_first
+        # First death
         payload1 = MockPayload(
             text="!lizardroulette",
             broadcaster=MockBroadcaster(id=99999),
@@ -1337,9 +1332,10 @@ class TestLizardRouletteHandler:
             await router.event_message(payload1)
 
         msg1 = payload1.broadcaster.send_message.call_args.kwargs["message"]
-        assert msg1 == "first shot for TestUser!"
+        assert "TestUser" in msg1
+        assert "LizardWithAGun" in msg1
 
-        # Second death — uses failure with $(deaths)
+        # Second death — death count increments
         payload2 = MockPayload(
             text="!lizardroulette",
             broadcaster=MockBroadcaster(id=99999),
@@ -1352,7 +1348,11 @@ class TestLizardRouletteHandler:
             await router.event_message(payload2)
 
         msg2 = payload2.broadcaster.send_message.call_args.kwargs["message"]
-        assert msg2 == "shot TestUser for the 2nd time!"
+        assert "TestUser" in msg2
+        stat = SkillStat.objects.get(
+            channel=channel, skill_name="lizardroulette", twitch_id="12345"
+        )
+        assert stat.stats["deaths"] == 2
 
     async def test_death_count_persists_in_skillstat(self, channel):
         channel.owner_access_token = "fake_token"
@@ -1367,7 +1367,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure": "shot!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1473,8 +1472,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 0,
-                "success": "survived!",
-                "failure_first": "shot $(user)!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1506,7 +1503,8 @@ class TestLizardRouletteHandler:
             await router.event_message(payload)
 
         msg = payload.broadcaster.send_message.call_args.kwargs["message"]
-        assert "shot TestUser" in msg
+        assert "TestUser" in msg
+        assert "LizardWithAGun" in msg
 
     async def test_bullets_decrement_on_use(self, channel):
         channel.owner_access_token = "fake_token"
@@ -1520,7 +1518,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 0,
-                "failure_first": "shot!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1607,7 +1604,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 0,
-                "failure_first": "shot!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1693,7 +1689,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure_first": "shot!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1749,7 +1744,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure": "$(user) dies, breaking $(streak)!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1785,7 +1779,12 @@ class TestLizardRouletteHandler:
             await router.event_message(payload)
 
         msg = payload.broadcaster.send_message.call_args.kwargs["message"]
-        assert msg == "TestUser dies, breaking 7!"
+        assert "TestUser" in msg
+        assert "LizardWithAGun" in msg
+        stat = SkillStat.objects.get(
+            channel=channel, skill_name="lizardroulette", twitch_id="12345"
+        )
+        assert stat.stats["streak"] == 0
 
     async def test_streak_tiers_escalate(self, channel):
         channel.owner_access_token = "fake_token"
@@ -1838,7 +1837,6 @@ class TestLizardRouletteHandler:
             enabled=True,
             config={
                 "odds": 100,
-                "failure_first": "shot!",
                 "timeout_delay": 0,
                 "cooldown": 0,
             },
@@ -1974,40 +1972,93 @@ class TestLizardRouletteHandler:
 # --- Streak tier and composition tests ---
 
 
-class TestGetStreakTier:
-    def test_tier_1(self):
-        from bot.skills.lizardroulette import _get_streak_tier
+class TestGetTier:
+    def test_streak_tier_1(self):
+        from bot.skills.lizardroulette import STREAK_TIERS
+        from bot.skills.lizardroulette import _get_tier
 
-        tier = _get_streak_tier(1)
+        tier = _get_tier(STREAK_TIERS, 1)
         assert tier["min"] == 1
         assert tier["max"] == 2
 
-    def test_tier_2(self):
-        from bot.skills.lizardroulette import _get_streak_tier
+    def test_streak_tier_2(self):
+        from bot.skills.lizardroulette import STREAK_TIERS
+        from bot.skills.lizardroulette import _get_tier
 
-        tier = _get_streak_tier(3)
+        tier = _get_tier(STREAK_TIERS, 3)
         assert tier["min"] == 3
         assert tier["max"] == 4
 
-    def test_tier_3(self):
-        from bot.skills.lizardroulette import _get_streak_tier
+    def test_streak_tier_3(self):
+        from bot.skills.lizardroulette import STREAK_TIERS
+        from bot.skills.lizardroulette import _get_tier
 
-        tier = _get_streak_tier(5)
+        tier = _get_tier(STREAK_TIERS, 5)
         assert tier["min"] == 5
         assert tier["max"] == 7
 
-    def test_tier_4(self):
-        from bot.skills.lizardroulette import _get_streak_tier
+    def test_streak_tier_4(self):
+        from bot.skills.lizardroulette import STREAK_TIERS
+        from bot.skills.lizardroulette import _get_tier
 
-        tier = _get_streak_tier(10)
+        tier = _get_tier(STREAK_TIERS, 10)
         assert tier["min"] == 8
         assert tier["max"] is None
 
     def test_high_streak_stays_tier_4(self):
-        from bot.skills.lizardroulette import _get_streak_tier
+        from bot.skills.lizardroulette import STREAK_TIERS
+        from bot.skills.lizardroulette import _get_tier
 
-        tier = _get_streak_tier(100)
+        tier = _get_tier(STREAK_TIERS, 100)
         assert tier["min"] == 8
+
+    def test_death_tier_first(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 1)
+        assert tier["min"] == 1
+        assert tier["max"] == 1
+
+    def test_death_tier_normal(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 5)
+        assert tier["min"] == 2
+        assert tier["max"] == 9
+
+    def test_death_tier_concerned(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 15)
+        assert tier["min"] == 10
+        assert tier["max"] == 24
+
+    def test_death_tier_impressed(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 30)
+        assert tier["min"] == 25
+        assert tier["max"] == 49
+
+    def test_death_tier_unhinged(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 70)
+        assert tier["min"] == 50
+        assert tier["max"] == 99
+
+    def test_death_tier_legendary(self):
+        from bot.skills.lizardroulette import DEATH_TIERS
+        from bot.skills.lizardroulette import _get_tier
+
+        tier = _get_tier(DEATH_TIERS, 100)
+        assert tier["min"] == 100
+        assert tier["max"] is None
 
 
 class TestComposeMessage:
