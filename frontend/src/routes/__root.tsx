@@ -48,6 +48,12 @@ function Sidebar({ user }: { user: MeResponse }) {
   const isCommands = currentChannel
     ? matchRoute({ to: '/$channelSlug/commands', params: { channelSlug: currentChannel.name } })
     : false
+  const isCounters = currentChannel
+    ? matchRoute({ to: '/$channelSlug/counters', params: { channelSlug: currentChannel.name } })
+    : false
+  const isAliases = currentChannel
+    ? matchRoute({ to: '/$channelSlug/aliases', params: { channelSlug: currentChannel.name } })
+    : false
 
   return (
     <aside className="flex w-48 flex-col border-r border-hive-border bg-hive-surface">
@@ -56,20 +62,42 @@ function Sidebar({ user }: { user: MeResponse }) {
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {currentChannel && (
-          <Link
-            to="/$channelSlug/commands"
-            params={{ channelSlug: currentChannel.name }}
-            className={cn(
-              'rounded px-3 py-1.5 text-sm transition-colors',
-              isCommands
-                ? 'bg-hive-accent-dim/20 text-hive-text'
-                : 'text-hive-muted hover:text-hive-text',
-            )}>
-            Commands
-          </Link>
+          <>
+            <Link
+              to="/$channelSlug/commands"
+              params={{ channelSlug: currentChannel.name }}
+              className={cn(
+                'rounded px-3 py-1.5 text-sm transition-colors',
+                isCommands
+                  ? 'bg-hive-accent-dim/20 text-hive-text'
+                  : 'text-hive-muted hover:text-hive-text',
+              )}>
+              Commands
+            </Link>
+            <Link
+              to="/$channelSlug/counters"
+              params={{ channelSlug: currentChannel.name }}
+              className={cn(
+                'rounded px-3 py-1.5 text-sm transition-colors',
+                isCounters
+                  ? 'bg-hive-accent-dim/20 text-hive-text'
+                  : 'text-hive-muted hover:text-hive-text',
+              )}>
+              Counters
+            </Link>
+            <Link
+              to="/$channelSlug/aliases"
+              params={{ channelSlug: currentChannel.name }}
+              className={cn(
+                'rounded px-3 py-1.5 text-sm transition-colors',
+                isAliases
+                  ? 'bg-hive-accent-dim/20 text-hive-text'
+                  : 'text-hive-muted hover:text-hive-text',
+              )}>
+              Aliases
+            </Link>
+          </>
         )}
-        <span className="cursor-default px-3 py-1.5 text-sm text-hive-muted/50">Counters</span>
-        <span className="cursor-default px-3 py-1.5 text-sm text-hive-muted/50">Aliases</span>
       </nav>
       <div className="border-t border-hive-border p-3">
         <div className="flex items-center gap-2">

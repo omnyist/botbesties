@@ -6,9 +6,11 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
+from core.models import Alias
 from core.models import Bot
 from core.models import Channel
 from core.models import Command
+from core.models import Counter
 from core.models import TwitchProfile
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -281,3 +283,222 @@ class TestVariableSchema:
     def test_unauthenticated_returns_401(self, unauthed_client):
         response = unauthed_client.get("/api/v1/variables/schema/")
         assert response.status_code == 401
+
+
+def _make_counter(test_channel, name="death", **kwargs):
+    """Helper to create a counter in the test channel."""
+    defaults = {
+        "channel": test_channel,
+        "name": name,
+        "label": "",
+        "value": 0,
+    }
+    defaults.update(kwargs)
+    return Counter.objects.create(**defaults)
+
+
+def _make_alias(test_channel, name="ct", target="count death", **kwargs):
+    """Helper to create an alias in the test channel."""
+    defaults = {
+        "channel": test_channel,
+        "name": name,
+        "target": target,
+    }
+    defaults.update(kwargs)
+    return Alias.objects.create(**defaults)
+
+
+class TestCounterList:
+    def test_lists_all_counters(self, authed_client, test_channel):
+        _make_counter(test_channel, name="death", label="Death Count", value=14)
+        _make_counter(test_channel, name="scare", value=3)
+
+        response = authed_client.get(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        names = [c["name"] for c in data]
+        assert "death" in names
+        assert "scare" in names
+
+    def test_not_found_for_non_owner(self, other_client, test_channel):
+        response = other_client.get(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_returns_401(self, unauthed_client, test_channel):
+        response = unauthed_client.get(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 401
+
+
+class TestCounterCreate:
+    def test_creates_counter(self, authed_client, test_channel):
+        response = authed_client.post(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "death", "label": "Death Count"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "death"
+        assert data["label"] == "Death Count"
+        assert data["value"] == 0
+        assert Counter.objects.filter(
+            channel=test_channel, name="death"
+        ).exists()
+
+    def test_duplicate_returns_409(self, authed_client, test_channel):
+        _make_counter(test_channel, name="death")
+        response = authed_client.post(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "death"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 409
+
+    def test_not_found_for_non_owner(self, other_client, test_channel):
+        response = other_client.post(
+            f"/api/v1/counters/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "death"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
+
+class TestCounterUpdate:
+    def test_updates_fields(self, authed_client, test_channel):
+        counter = _make_counter(test_channel, name="death", value=10)
+        response = authed_client.patch(
+            f"/api/v1/counters/{counter.id}/",
+            data=json.dumps({"label": "Death Count", "value": 42}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        counter.refresh_from_db()
+        assert counter.label == "Death Count"
+        assert counter.value == 42
+
+    def test_forbidden_for_non_owner(self, other_client, test_channel):
+        counter = _make_counter(test_channel, name="death")
+        response = other_client.patch(
+            f"/api/v1/counters/{counter.id}/",
+            data=json.dumps({"value": 99}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+
+
+class TestCounterDelete:
+    def test_deletes_counter(self, authed_client, test_channel):
+        counter = _make_counter(test_channel, name="death")
+        response = authed_client.delete(f"/api/v1/counters/{counter.id}/")
+        assert response.status_code == 200
+        assert not Counter.objects.filter(pk=counter.id).exists()
+
+    def test_forbidden_for_non_owner(self, other_client, test_channel):
+        counter = _make_counter(test_channel, name="death")
+        response = other_client.delete(f"/api/v1/counters/{counter.id}/")
+        assert response.status_code == 403
+        assert Counter.objects.filter(pk=counter.id).exists()
+
+
+class TestAliasList:
+    def test_lists_all_aliases(self, authed_client, test_channel):
+        _make_alias(test_channel, name="ct", target="count death")
+        _make_alias(test_channel, name="fc", target="followage")
+
+        response = authed_client.get(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        names = [a["name"] for a in data]
+        assert "ct" in names
+        assert "fc" in names
+
+    def test_not_found_for_non_owner(self, other_client, test_channel):
+        response = other_client.get(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_returns_401(self, unauthed_client, test_channel):
+        response = unauthed_client.get(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/"
+        )
+        assert response.status_code == 401
+
+
+class TestAliasCreate:
+    def test_creates_alias(self, authed_client, test_channel):
+        response = authed_client.post(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "ct", "target": "count death"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "ct"
+        assert data["target"] == "count death"
+        assert Alias.objects.filter(
+            channel=test_channel, name="ct"
+        ).exists()
+
+    def test_duplicate_returns_409(self, authed_client, test_channel):
+        _make_alias(test_channel, name="ct")
+        response = authed_client.post(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "ct", "target": "count death"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 409
+
+    def test_not_found_for_non_owner(self, other_client, test_channel):
+        response = other_client.post(
+            f"/api/v1/aliases/channels/{test_channel.twitch_channel_name}/",
+            data=json.dumps({"name": "ct", "target": "count death"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 404
+
+
+class TestAliasUpdate:
+    def test_updates_fields(self, authed_client, test_channel):
+        alias = _make_alias(test_channel, name="ct", target="count death")
+        response = authed_client.patch(
+            f"/api/v1/aliases/{alias.id}/",
+            data=json.dumps({"target": "count scare"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        alias.refresh_from_db()
+        assert alias.target == "count scare"
+
+    def test_forbidden_for_non_owner(self, other_client, test_channel):
+        alias = _make_alias(test_channel, name="ct")
+        response = other_client.patch(
+            f"/api/v1/aliases/{alias.id}/",
+            data=json.dumps({"target": "count scare"}),
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+
+
+class TestAliasDelete:
+    def test_deletes_alias(self, authed_client, test_channel):
+        alias = _make_alias(test_channel, name="ct")
+        response = authed_client.delete(f"/api/v1/aliases/{alias.id}/")
+        assert response.status_code == 200
+        assert not Alias.objects.filter(pk=alias.id).exists()
+
+    def test_forbidden_for_non_owner(self, other_client, test_channel):
+        alias = _make_alias(test_channel, name="ct")
+        response = other_client.delete(f"/api/v1/aliases/{alias.id}/")
+        assert response.status_code == 403
+        assert Alias.objects.filter(pk=alias.id).exists()

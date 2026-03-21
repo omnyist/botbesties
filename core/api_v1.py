@@ -11,8 +11,10 @@ from ninja import Router
 from ninja import Schema
 from ninja.errors import HttpError
 
+from .models import Alias
 from .models import Channel
 from .models import Command
+from .models import Counter
 from .models import TwitchProfile
 
 v1_router = Router()
@@ -82,6 +84,42 @@ async def _get_user_command(request, command_id: uuid.UUID) -> Command:
         raise HttpError(403, "Not authorized for this channel")
 
     return cmd
+
+
+async def _get_user_counter(request, counter_id: uuid.UUID) -> Counter:
+    """Verify the authenticated user owns this counter's channel, or raise."""
+    user = await _require_auth(request)
+    profile = await _get_profile(user)
+
+    try:
+        counter = await sync_to_async(
+            Counter.objects.select_related("channel").get
+        )(pk=counter_id)
+    except Counter.DoesNotExist:
+        raise HttpError(404, "Counter not found")
+
+    if counter.channel.twitch_channel_id != profile.twitch_id:
+        raise HttpError(403, "Not authorized for this channel")
+
+    return counter
+
+
+async def _get_user_alias(request, alias_id: uuid.UUID) -> Alias:
+    """Verify the authenticated user owns this alias's channel, or raise."""
+    user = await _require_auth(request)
+    profile = await _get_profile(user)
+
+    try:
+        alias = await sync_to_async(
+            Alias.objects.select_related("channel").get
+        )(pk=alias_id)
+    except Alias.DoesNotExist:
+        raise HttpError(404, "Alias not found")
+
+    if alias.channel.twitch_channel_id != profile.twitch_id:
+        raise HttpError(403, "Not authorized for this channel")
+
+    return alias
 
 
 # --- Me ---
@@ -284,3 +322,175 @@ async def variable_schema(request):
 
     registry = create_registry()
     return registry.schema()
+
+
+# --- Counters ---
+
+
+class CounterSchema(Schema):
+    id: uuid.UUID
+    name: str
+    label: str
+    value: int
+
+
+class CounterCreateSchema(Schema):
+    name: str
+    label: str = ""
+    value: int = 0
+
+
+class CounterUpdateSchema(Schema):
+    name: str | None = None
+    label: str | None = None
+    value: int | None = None
+
+
+@v1_router.get(
+    "/counters/channels/{channel_slug}/", response=list[CounterSchema]
+)
+async def list_counters(request, channel_slug: str):
+    """List all counters for a channel."""
+    channel, _ = await _get_user_channel(request, channel_slug)
+
+    counters = []
+    async for counter in Counter.objects.filter(channel=channel).order_by("name"):
+        counters.append(counter)
+    return counters
+
+
+@v1_router.post("/counters/channels/{channel_slug}/", response=CounterSchema)
+async def create_counter(
+    request, channel_slug: str, data: CounterCreateSchema
+):
+    """Create a counter for a channel."""
+    if not data.name or not VALID_COMMAND_NAME.match(data.name):
+        raise HttpError(
+            422, "Counter name must be non-empty and contain only letters, numbers, and underscores."
+        )
+
+    channel, _ = await _get_user_channel(request, channel_slug)
+
+    try:
+        counter = await sync_to_async(Counter.objects.create)(
+            channel=channel,
+            name=data.name,
+            label=data.label,
+            value=data.value,
+        )
+    except IntegrityError:
+        raise HttpError(409, f"Counter '{data.name}' already exists in this channel.")
+
+    return counter
+
+
+@v1_router.patch("/counters/{counter_id}/", response=CounterSchema)
+async def update_counter(
+    request, counter_id: uuid.UUID, data: CounterUpdateSchema
+):
+    """Update a counter."""
+    counter = await _get_user_counter(request, counter_id)
+
+    update_fields = []
+    for field_name in ["name", "label", "value"]:
+        value = getattr(data, field_name)
+        if value is not None:
+            setattr(counter, field_name, value)
+            update_fields.append(field_name)
+
+    if update_fields:
+        await sync_to_async(counter.save)(update_fields=update_fields)
+
+    return counter
+
+
+@v1_router.delete("/counters/{counter_id}/")
+async def delete_counter(request, counter_id: uuid.UUID):
+    """Delete a counter."""
+    counter = await _get_user_counter(request, counter_id)
+    await sync_to_async(counter.delete)()
+    return {"success": True}
+
+
+# --- Aliases ---
+
+
+class AliasSchema(Schema):
+    id: uuid.UUID
+    name: str
+    target: str
+
+
+class AliasCreateSchema(Schema):
+    name: str
+    target: str
+
+
+class AliasUpdateSchema(Schema):
+    name: str | None = None
+    target: str | None = None
+
+
+@v1_router.get(
+    "/aliases/channels/{channel_slug}/", response=list[AliasSchema]
+)
+async def list_aliases(request, channel_slug: str):
+    """List all aliases for a channel."""
+    channel, _ = await _get_user_channel(request, channel_slug)
+
+    aliases = []
+    async for alias in Alias.objects.filter(channel=channel).order_by("name"):
+        aliases.append(alias)
+    return aliases
+
+
+@v1_router.post("/aliases/channels/{channel_slug}/", response=AliasSchema)
+async def create_alias(
+    request, channel_slug: str, data: AliasCreateSchema
+):
+    """Create an alias for a channel."""
+    if not data.name or not VALID_COMMAND_NAME.match(data.name):
+        raise HttpError(
+            422, "Alias name must be non-empty and contain only letters, numbers, and underscores."
+        )
+
+    channel, _ = await _get_user_channel(request, channel_slug)
+
+    try:
+        alias = await sync_to_async(Alias.objects.create)(
+            channel=channel,
+            name=data.name,
+            target=data.target,
+        )
+    except IntegrityError:
+        raise HttpError(409, f"Alias '!{data.name}' already exists in this channel.")
+
+    return alias
+
+
+@v1_router.patch("/aliases/{alias_id}/", response=AliasSchema)
+async def update_alias(
+    request, alias_id: uuid.UUID, data: AliasUpdateSchema
+):
+    """Update an alias."""
+    alias = await _get_user_alias(request, alias_id)
+
+    update_fields = []
+    for field_name in ["name", "target"]:
+        value = getattr(data, field_name)
+        if value is not None:
+            setattr(alias, field_name, value)
+            update_fields.append(field_name)
+
+    if update_fields:
+        await sync_to_async(alias.save)(update_fields=update_fields)
+
+    return alias
+
+
+@v1_router.delete("/aliases/{alias_id}/")
+async def delete_alias(request, alias_id: uuid.UUID):
+    """Delete an alias."""
+    alias = await _get_user_alias(request, alias_id)
+    await sync_to_async(alias.delete)()
+    return {"success": True}
